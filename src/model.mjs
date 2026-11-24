@@ -385,3 +385,22 @@ export function terminalCandidates(entries, has) {
   if (has("xdg-terminal-exec")) found.push({ id: "xdg-terminal-exec", label: "Standard-Terminal (xdg-terminal-exec)", command: "xdg-terminal-exec", verified: true });
   return found.sort((a, b) => Number(b.verified) - Number(a.verified));
 }
+
+// Every word of the query has to appear, in any order, in the project's names or the container's names.
+// A project that matches by itself keeps all its containers; otherwise only the containers that match stay.
+export function filterGroups(groups, query, projectLabel, containerLabel) {
+  const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return groups;
+  const matches = text => words.every(w => text.includes(w));
+  const result = [];
+  for (const group of groups) {
+    const groupText = `${group.project} ${projectLabel(group.project)}`.toLocaleLowerCase();
+    if (matches(groupText)) {
+      result.push(group);
+      continue;
+    }
+    const members = group.members.filter(c => matches(`${groupText} ${c.name} ${containerLabel(c)}`.toLocaleLowerCase()));
+    if (members.length) result.push(Object.assign({}, group, { members, active: members.filter(isActive) }));
+  }
+  return result;
+}

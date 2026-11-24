@@ -40,7 +40,10 @@ Kirigami.ApplicationWindow {
     property var availableUpdate: null
     property bool manualUpdateCheck: false
 
-    readonly property var groups: Model.groupContainers(containers, remembered)
+    // The search filters what the list shows; counts, the tray and the actions keep seeing every container.
+    property string query: ""
+    readonly property var allGroups: Model.groupContainers(containers, remembered)
+    readonly property var groups: Model.filterGroups(allGroups, query, projectName, containerName)
     readonly property var sections: Model.splitSections(groups)
     // Group keys per section, reassigned only when groups come, go or move, and the groups by key, fresh on every refresh.
     // The list's Repeaters count keys instead of holding the data, so new data updates the rows instead of recreating them.
@@ -474,8 +477,13 @@ Kirigami.ApplicationWindow {
         return busy[`project:${group.project}`] !== undefined || group.members.some(c => busy[c.id] !== undefined);
     }
 
+    // Project actions act on the whole project, also when the search shows only some of its containers.
+    function wholeGroup(group) {
+        return group.project ? (allGroups.find(g => g.project === group.project) ?? group) : group;
+    }
+
     function openMenu(group, container) {
-        menu.group = group;
+        menu.group = wholeGroup(group);
         menu.container = container;
         menu.popup();
     }
@@ -835,6 +843,15 @@ Kirigami.ApplicationWindow {
         header: ColumnLayout {
             spacing: 0
 
+            Kirigami.SearchField {
+                id: search
+                Layout.fillWidth: true
+                Layout.margins: Kirigami.Units.smallSpacing
+                placeholderText: "Projekte und Container filtern…"
+                onTextChanged: root.query = text.trim()
+                Keys.onEscapePressed: text = ""
+            }
+
             Kirigami.InlineMessage {
                 Layout.fillWidth: true
                 visible: root.errorTitle !== ""
@@ -876,8 +893,8 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.topMargin: Kirigami.Units.gridUnit * 2
                 visible: !root.errorTitle && (!root.loaded || root.groups.length === 0)
-                icon.name: root.loaded ? "dialog-ok" : ""
-                text: root.loaded ? "Keine Container" : "Container werden geladen…"
+                icon.name: !root.loaded ? "" : root.query ? "edit-find" : "dialog-ok"
+                text: !root.loaded ? "Container werden geladen…" : root.query ? "Keine Treffer" : "Keine Container"
             }
 
             Repeater {
@@ -891,7 +908,8 @@ Kirigami.ApplicationWindow {
                     required property string modelData
                     readonly property string key: modelData
                     readonly property var keys: root.layout[key] ?? []
-                    readonly property bool isOpen: !root.closedSections.includes(key)
+                    // While searching every hit is shown, whatever was folded before.
+                    readonly property bool isOpen: root.query !== "" || !root.closedSections.includes(key)
 
                     Layout.fillWidth: true
                     Layout.topMargin: key === "inactive" ? Kirigami.Units.largeSpacing : 0
@@ -941,7 +959,7 @@ Kirigami.ApplicationWindow {
                             readonly property var modelData: root.groupByKey[section.keys[index]] ?? root.emptyGroup
                             readonly property string project: modelData.project
                             readonly property string label: root.projectName(project)
-                            readonly property bool isOpen: root.openGroups.includes(modelData.key)
+                            readonly property bool isOpen: root.query !== "" || root.openGroups.includes(modelData.key)
                             readonly property bool busy: root.groupBusy(modelData)
                             readonly property bool idle: modelData.active.length === 0
                             readonly property var failedMembers: modelData.members.filter(c => root.failed[c.id])
@@ -1051,7 +1069,7 @@ Kirigami.ApplicationWindow {
                                             text: group.idle ? `${group.label} starten` : `Alle Container von ${group.label} stoppen`
                                             QQC2.ToolTip.visible: hovered
                                             QQC2.ToolTip.text: text
-                                            onClicked: group.idle ? root.startProject(group.modelData) : root.stopGroup(group.modelData)
+                                            onClicked: group.idle ? root.startProject(root.wholeGroup(group.modelData)) : root.stopGroup(root.wholeGroup(group.modelData))
                                         }
                                     }
                                 }

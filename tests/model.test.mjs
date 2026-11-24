@@ -190,3 +190,21 @@ test("terminals come from desktop entries, with their command option when it is 
   assert.equal(stripFieldCodes("app %F --x 100%% %i"), "app --x 100%");
   assert.equal(parseDesktopEntry("[Other]\nName=x\n[Desktop Entry]\nName = y").Name, "y");
 });
+
+test("the search keeps matching projects whole and filters containers by every word", async () => {
+  const { filterGroups } = await import("../src/model.mjs");
+  const groups = groupContainers([container("web-1", "shop"), container("db-1", "shop"), container("web-1", "blog"), container("tool")], { wiki: { workingDir: "/w", configFiles: ["/w/c.yaml"] } });
+  const label = p => (p === "blog" ? "Mein Blog" : p);
+  const name = c => (c.name === "container-tool" ? "Werkzeug" : c.name);
+  const run = q => filterGroups(groups, q, label, name).map(g => [g.project, g.members.map(c => c.id)]);
+  assert.deepEqual(run(""), groups.map(g => [g.project, g.members.map(c => c.id)]));
+  assert.deepEqual(run("SHOP"), [["shop", ["web-1", "db-1"]]]);
+  assert.deepEqual(run("web"), [["blog", ["web-1"]], ["shop", ["web-1"]]]);
+  assert.deepEqual(run("shop web"), [["shop", ["web-1"]]]);
+  assert.deepEqual(run("mein"), [["blog", ["web-1"]]]);
+  assert.deepEqual(run("werkzeug"), [["", ["tool"]]]);
+  assert.deepEqual(run("wiki"), [["wiki", []]]);
+  assert.deepEqual(run("nichts"), []);
+  const filtered = filterGroups(groups, "web", label, name).find(g => g.project === "shop");
+  assert.deepEqual(filtered.active.map(c => c.id), ["web-1"]);
+});
