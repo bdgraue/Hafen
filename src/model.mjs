@@ -210,12 +210,21 @@ export function splitCommand(command) {
 }
 
 // The terminal closes when its command ends; without the pause the logs of a stopped container would flash past.
-export function logsCommand(container) {
-  return ["sh", "-c", 'docker logs --follow --tail 200 -- "$1"; printf "\\n— Ende der Logs. Enter schließt das Fenster. —"; read -r _', "sh", container.id];
+// The closing note travels as $0, the command as "$@", so nothing of either is parsed by the shell.
+export function holdOpen(argv, closingNote) {
+  return ["sh", "-c", '"$@"; printf "\\n— %s —" "$0"; read -r _', closingNote, ...argv];
 }
 
-export function shellCommand(container) {
-  return ["docker", "exec", "--interactive", "--tty", container.id, "sh", "-c", "[ -x /bin/bash ] && exec bash || exec sh"];
+export function logsCommand(container, contextArgs, closingNote) {
+  return holdOpen(["docker", ...contextArgs, "logs", "--follow", "--tail", "200", container.id], closingNote);
+}
+
+export function projectLogsCommand(project, source, contextArgs, closingNote) {
+  return holdOpen(["docker", ...contextArgs, ...composeArgs(project, source, ["logs", "--follow", "--tail", "200"])], closingNote);
+}
+
+export function shellCommand(container, contextArgs) {
+  return ["docker", ...contextArgs, "exec", "--interactive", "--tty", container.id, "sh", "-c", "[ -x /bin/bash ] && exec bash || exec sh"];
 }
 
 // Docker.run reports this exit code when the docker program could not be started at all.

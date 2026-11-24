@@ -88,6 +88,7 @@ Kirigami.ApplicationWindow {
             done: Kirigami.Theme.positiveTextColor,
             stopped: Kirigami.Theme.disabledTextColor
         })
+    readonly property string logsEnd: "Ende der Logs. Enter schließt das Fenster."
     readonly property var swatches: ["#22a99a", "#e3814f", "#5b8def", "#8b7cf6", "#3fae6a", "#d9649a", "#d4a72c", "#e05252", "#7a8796"]
 
     title: "Hafen"
@@ -686,6 +687,8 @@ Kirigami.ApplicationWindow {
         readonly property bool forContainer: container !== null
         readonly property var actions: forContainer ? Model.actionsFor(container) : null
         readonly property bool isProject: !forContainer && (group?.project ?? "") !== ""
+        // Compose files are known: the project can act as a whole.
+        readonly property bool hasCompose: isProject && root.remembered[group.project] !== undefined
         readonly property var members: group?.members ?? []
         readonly property var removable: forContainer ? [] : members.filter(c => Model.actionsFor(c).remove)
         readonly property bool canStart: forContainer ? actions.start : isProject && (members.length === 0 || members.some(c => Model.actionsFor(c).start))
@@ -727,27 +730,27 @@ Kirigami.ApplicationWindow {
         QQC2.MenuItem {
             text: "Herunterfahren…"
             icon.name: "system-shutdown-symbolic"
-            visible: menu.isProject && menu.members.length > 0 && root.remembered[menu.group.project] !== undefined
+            visible: menu.hasCompose && menu.members.length > 0
             height: visible ? implicitHeight : 0
             onTriggered: root.downGroup(menu.group)
         }
         QQC2.MenuSeparator {
-            visible: menu.forContainer
+            visible: menu.forContainer || menu.hasCompose
             height: visible ? implicitHeight : 0
         }
         QQC2.MenuItem {
-            text: "Logs anzeigen"
+            text: menu.forContainer ? "Logs anzeigen" : "Logs aller Container"
             icon.name: "view-list-text"
-            visible: menu.forContainer
+            visible: menu.forContainer || menu.hasCompose
             height: visible ? implicitHeight : 0
-            onTriggered: root.inTerminal(Model.logsCommand(menu.container), "Logs")
+            onTriggered: menu.forContainer ? root.inTerminal(Model.logsCommand(menu.container, Docker.contextArgs(), root.logsEnd), "Logs") : root.inTerminal(Model.projectLogsCommand(menu.group.project, root.remembered[menu.group.project], Docker.contextArgs(), root.logsEnd), "Logs")
         }
         QQC2.MenuItem {
             text: "Shell öffnen"
             icon.name: "utilities-terminal"
             visible: menu.forContainer && menu.actions.shell
             height: visible ? implicitHeight : 0
-            onTriggered: root.inTerminal(Model.shellCommand(menu.container), "Shell")
+            onTriggered: root.inTerminal(Model.shellCommand(menu.container, Docker.contextArgs()), "Shell")
         }
         QQC2.MenuItem {
             text: "Projektordner öffnen"

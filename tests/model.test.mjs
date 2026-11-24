@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   parseContainers, groupContainers, groupHealth, statusColor, containerTooltip, shortName, uptime, actionSummary,
   composeSources, composeUpArgs, composeArgs, COMPOSE_COMMANDS, splitSections, actionsFor, actionArgs, condition, publishedPorts, splitCommand,
-  logsCommand, shellCommand, describeError, NOT_STARTED, parseSize, parseStats, statsTotal, formatBytes, formatPercent, isNewer,
+  logsCommand, projectLogsCommand, shellCommand, describeError, NOT_STARTED, parseSize, parseStats, statsTotal, formatBytes, formatPercent, isNewer,
 } from "../src/model.mjs";
 
 const container = (id, project = "", status = "Up 2 hours", state = "running") => ({
@@ -123,9 +123,11 @@ test("terminal commands split into argv and fail without a terminal", () => {
   assert.throws(() => splitCommand("   "), /Kein Terminal/);
   assert.throws(() => splitCommand(`term "open`), /schließendes/);
   const c = container("abc", "shop");
-  assert.deepEqual(logsCommand(c).slice(-2), ["sh", "abc"]);
-  assert.match(logsCommand(c)[2], /docker logs --follow --tail 200 -- "\$1"/);
-  assert.deepEqual(shellCommand(c).slice(0, 5), ["docker", "exec", "--interactive", "--tty", "abc"]);
+  assert.deepEqual(logsCommand(c, [], "Ende"), ["sh", "-c", '"$@"; printf "\\n— %s —" "$0"; read -r _', "Ende", "docker", "logs", "--follow", "--tail", "200", "abc"]);
+  assert.deepEqual(logsCommand(c, ["--context", "remote"], "Ende").slice(4, 8), ["docker", "--context", "remote", "logs"]);
+  assert.deepEqual(shellCommand(c, []).slice(0, 5), ["docker", "exec", "--interactive", "--tty", "abc"]);
+  const source = { workingDir: "/srv/shop", configFiles: ["/srv/shop/compose.yaml"] };
+  assert.deepEqual(projectLogsCommand("shop", source, [], "Ende").slice(4), ["docker", "compose", "--project-name", "shop", "--project-directory", "/srv/shop", "--file", "/srv/shop/compose.yaml", "logs", "--follow", "--tail", "200"]);
 });
 
 test("Docker errors name their cause", () => {
