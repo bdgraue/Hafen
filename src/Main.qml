@@ -119,6 +119,7 @@ Kirigami.ApplicationWindow {
         }
         if (settings.checkUpdates)
             Launcher.checkForUpdate();
+        Docker.startWatching();
     }
 
     Settings {
@@ -142,11 +143,24 @@ Kirigami.ApplicationWindow {
     }
 
     Timer {
-        interval: root.visible ? Model.REFRESH_MS : Model.HIDDEN_REFRESH_MS
+        interval: Docker.watching ? (root.visible ? Model.WATCHED_REFRESH_MS : Model.WATCHED_HIDDEN_REFRESH_MS) : (root.visible ? Model.REFRESH_MS : Model.HIDDEN_REFRESH_MS)
         running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh(false)
+    }
+
+    Timer {
+        id: eventDebounce
+        interval: Model.EVENT_DEBOUNCE_MS
+        onTriggered: root.refresh(false)
+    }
+
+    Connections {
+        target: Docker
+        function onContainerEvent(json) {
+            eventDebounce.restart();
+        }
     }
 
     Timer {

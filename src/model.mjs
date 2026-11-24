@@ -6,6 +6,11 @@
 export const REFRESH_MS = 5000;
 // Hidden in the tray only the warning overlay needs fresh data; showing the window reads at once.
 export const HIDDEN_REFRESH_MS = 30000;
+// While `docker events` reports every change, polling only keeps the uptimes current and covers a lost event.
+export const WATCHED_REFRESH_MS = 30000;
+export const WATCHED_HIDDEN_REFRESH_MS = 120000;
+// A `compose up` fires dozens of events within a second; they become one refresh.
+export const EVENT_DEBOUNCE_MS = 300;
 // `docker stats --no-stream` takes about two seconds, so it gets its own, slower timer.
 export const STATS_REFRESH_MS = 10000;
 // Reading the list or the stats must not wait forever on a hanging daemon. Actions get no limit:
