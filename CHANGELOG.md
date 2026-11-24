@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0
+
+- Änderungen erscheinen sofort über `docker events`; das regelmäßige Einlesen
+  läuft nur noch alle 30 s (Tray: 120 s) als Rückfall.
+- Compose-Projekte starten, stoppen und starten neu über `docker compose`, in
+  der Reihenfolge ihrer Abhängigkeiten; neu ist Herunterfahren
+  (`docker compose down` ohne `--volumes`).
+- Logs aller Container eines Compose-Projekts im Terminal.
+- Suchfeld für Projekte und Container.
+- Tray-Menü mit den Compose-Projekten.
+- Meldungen bei Abstürzen, Neustart-Schleifen, toten und kranken Containern.
+- Speicherplatz anzeigen und aufräumen (Container, Images, Build-Cache).
+- Docker-Kontext wählbar; gemerkte Projekte je Kontext.
+- Übersetzbar: Englisch als Quelle, Deutsch mitgeliefert, weitere Sprachen als
+  `i18n/hafen_<sprache>.ts`.
+- Tastatursteuerung.
+- Die Fensterüberschrift nennt nur noch den Daemon; die Zahlen stehen in den
+  Abschnittsköpfen und im Tray-Tooltip.
+- Behoben: Projekte erschienen in der App unsortiert, weil Qts
+  JavaScript-Engine destrukturierte Vergleichsfunktionen falsch sortiert.
+
 ## 0.2.0
 
 - Liste getrennt nach „Aktiv“ und „Inaktiv“, beide einklappbar.

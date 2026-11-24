@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.21)
-project(hafen VERSION 0.2.0 LANGUAGES CXX
+project(hafen VERSION 0.3.0 LANGUAGES CXX
     DESCRIPTION "Docker-Container nach Compose-Projekt im Tray"
     HOMEPAGE_URL "https://github.com/bdgraue/Hafen")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Network Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Network Qml Quick QuickControls2 LinguistTools)
 find_package(KF6StatusNotifierItem REQUIRED)
 find_package(KF6DBusAddons REQUIRED)
 find_package(KF6Kirigami REQUIRED)
@@ -30,6 +30,15 @@ qt_add_qml_module(hafen
 
 target_include_directories(hafen PRIVATE src)
 target_compile_definitions(hafen PRIVATE HAFEN_VERSION="${PROJECT_VERSION}")
+
+# Every i18n/hafen_<language>.ts is compiled into the binary; a new language needs only its file (see README).
+# `cmake --build build --target update_translations` adds new source texts to all of them.
+file(GLOB HAFEN_TS_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/i18n/hafen_*.ts")
+qt_add_translations(hafen
+    TS_FILES ${HAFEN_TS_FILES}
+    SOURCE_TARGETS hafen
+    LUPDATE_OPTIONS -no-obsolete -locations none
+)
 
 target_link_libraries(hafen PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2

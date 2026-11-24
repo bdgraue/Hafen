@@ -1,11 +1,14 @@
 [Desktop Entry]
 Type=Application
 Name=Hafen
-GenericName=Docker-Container
-Comment=Docker-Container nach Compose-Projekt im Tray
+GenericName=Docker Containers
+GenericName[de]=Docker-Container
+Comment=Docker containers by Compose project, in the tray
+Comment[de]=Docker-Container nach Compose-Projekt im Tray
 Exec=hafen
 Icon=io.github.bdgraue.Hafen
 Terminal=false
 Categories=Development;Qt;KDE;
 Keywords=docker;container;compose;
+Keywords[de]=docker;container;compose;
 StartupNotify=false

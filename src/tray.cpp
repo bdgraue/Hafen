@@ -5,6 +5,7 @@
 
 #include <KStatusNotifierItem>
 #include <QIcon>
+#include <QMenu>
 
 Tray::Tray(QObject *parent)
     : QObject(parent)
@@ -66,4 +67,55 @@ void Tray::setWarning(bool warning)
 void Tray::notify(const QString &title, const QString &body, const QString &iconName)
 {
     m_item->showMessage(title, body, iconName);
+}
+
+void Tray::setProjects(const QVariantList &projects)
+{
+    if (projects == m_projects) {
+        return;
+    }
+    m_projects = projects;
+
+    QMenu *menu = m_item->contextMenu();
+    for (QAction *action : std::as_const(m_projectActions)) {
+        menu->removeAction(action);
+        // A submenu owns its menuAction(); deleting the menu deletes the action with it.
+        if (QMenu *sub = action->menu()) {
+            delete sub;
+        } else {
+            delete action;
+        }
+    }
+    m_projectActions.clear();
+    if (projects.isEmpty()) {
+        return;
+    }
+
+    QAction *before = menu->actions().isEmpty() ? nullptr : menu->actions().constFirst();
+    for (const QVariant &entry : projects) {
+        const QVariantMap project = entry.toMap();
+        const QString name = project.value(QStringLiteral("project")).toString();
+        auto *sub = new QMenu(project.value(QStringLiteral("label")).toString());
+        sub->setIcon(QIcon::fromTheme(project.value(QStringLiteral("active")).toBool() ? QStringLiteral("media-playback-start")
+                                                                                         : QStringLiteral("media-playback-stop")));
+        auto add = [this, sub, name](const QString &text, const QString &icon, const QString &action) {
+            connect(sub->addAction(QIcon::fromTheme(icon), text), &QAction::triggered, this, [this, name, action] {
+                Q_EMIT projectAction(name, action);
+            });
+        };
+        if (project.value(QStringLiteral("canStart")).toBool()) {
+            add(tr("Start"), QStringLiteral("media-playback-start"), QStringLiteral("start"));
+        }
+        if (project.value(QStringLiteral("canStop")).toBool()) {
+            add(tr("Restart"), QStringLiteral("view-refresh"), QStringLiteral("restart"));
+            add(tr("Stop…"), QStringLiteral("media-playback-stop"), QStringLiteral("stop"));
+        }
+        QAction *action = sub->menuAction();
+        menu->insertAction(before, action);
+        m_projectActions.append(action);
+    }
+    QAction *separator = new QAction(menu);
+    separator->setSeparator(true);
+    menu->insertAction(before, separator);
+    m_projectActions.append(separator);
 }

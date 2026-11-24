@@ -5,12 +5,18 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Hafen</name>
-  <summary>Docker-Container nach Compose-Projekt im Tray</summary>
+  <summary>Docker containers by Compose project, in the tray</summary>
+  <summary xml:lang="de">Docker-Container nach Compose-Projekt im Tray</summary>
   <description>
     <p>
+      Hafen lists running and stopped Docker containers grouped by Compose project, remembers projects
+      even after docker compose down, and starts, stops, restarts or removes them. Logs and a shell open
+      in the terminal of your choice.
+    </p>
+    <p xml:lang="de">
       Hafen zeigt laufende und gestoppte Docker-Container gruppiert nach Compose-Projekt,
       merkt sich Projekte auch nach docker compose down und startet, stoppt, startet neu
-      oder löscht sie. Logs und eine Shell öffnen sich im eingestellten Terminal.
+      oder löscht sie. Logs und eine Shell öffnen sich im Terminal deiner Wahl.
     </p>
   </description>
   <launchable type="desktop-id">io.github.bdgraue.Hafen.desktop</launchable>
@@ -21,6 +27,7 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-11-24"/>
     <release version="0.2.0" date="2026-11-24"/>
     <release version="0.1.0" date="2026-11-24"/>
   </releases>
