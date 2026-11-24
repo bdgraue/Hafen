@@ -350,21 +350,18 @@ Kirigami.ApplicationWindow {
         }
     }
 
-    // `compose up` also recreates services whose containers are gone.
-    function startProject(group) {
-        const source = remembered[group.project];
-        if (!source) {
-            act("start", group.members.filter(c => Model.actionsFor(c).start), projectName(group.project));
-            return;
-        }
+    // With the project's Compose files the whole project acts as one, in dependency order; `compose up` also recreates
+    // services whose containers are gone. Without them Hafen falls back to one docker call per container.
+    function compose(group, action) {
+        const label = projectName(group.project);
         const key = `project:${group.project}`;
         if (busy[key])
             return;
         let args;
         try {
-            args = Model.composeUpArgs(group.project, source);
+            args = Model.composeArgs(group.project, remembered[group.project], Model.COMPOSE_COMMANDS[action]);
         } catch (e) {
-            report("start", projectName(group.project), [
+            report(action, label, [
                 {
                     name: group.project,
                     error: String(e.message ?? e)
@@ -372,16 +369,30 @@ Kirigami.ApplicationWindow {
             ]);
             return;
         }
-        busy = withKey(busy, key, "start");
+        busy = withKey(busy, key, action);
         Docker.run(args, (code, stdout, stderr) => {
             busy = withKey(busy, key, undefined);
-            report("start", projectName(group.project), [
+            report(action, label, [
                 {
-                    name: "docker compose up",
+                    name: `docker compose ${Model.COMPOSE_COMMANDS[action][0]}`,
                     error: code === 0 ? null : (stderr.trim() || `Exit ${code}`)
                 }
             ]);
         }, Model.NO_TIMEOUT);
+    }
+
+    function startProject(group) {
+        if (remembered[group.project])
+            compose(group, "start");
+        else
+            act("start", group.members.filter(c => Model.actionsFor(c).start), projectName(group.project));
+    }
+
+    function restartProject(group) {
+        if (remembered[group.project])
+            compose(group, "restart");
+        else
+            act("restart", group.members.filter(c => Model.actionsFor(c).restart), projectName(group.project));
     }
 
     function report(action, label, results) {
@@ -409,22 +420,33 @@ Kirigami.ApplicationWindow {
         launch(prefix.concat(command), what);
     }
 
-    function confirmStop(targets, label, detail) {
-        stopConfirm.targets = targets;
-        stopConfirm.label = label;
-        stopConfirm.title = `${label} stoppen?`;
+    function confirm(title, detail, buttonText, buttonIcon, onConfirm) {
+        stopConfirm.title = title;
         stopConfirm.subtitle = detail;
+        stopConfirm.buttonText = buttonText;
+        stopConfirm.buttonIcon = buttonIcon;
+        stopConfirm.onConfirm = onConfirm;
         stopConfirm.open();
     }
 
     function stopGroup(group) {
-        const members = group.members.filter(c => Model.actionsFor(c).stop && !busy[c.id]);
         const label = projectName(group.project);
-        confirmStop(members, label, `${members.length} aktive Container des Compose-Projekts werden einzeln mit „docker stop“ angehalten: ${members.map(containerName).join(", ")}. Container, Volumes und Netzwerke bleiben erhalten.`);
+        if (remembered[group.project]) {
+            confirm(`${label} stoppen?`, `Das Compose-Projekt wird mit „docker compose stop“ angehalten, in der Reihenfolge seiner Abhängigkeiten. Container, Volumes und Netzwerke bleiben erhalten.`, "Stoppen", "media-playback-stop", () => compose(group, "stop"));
+            return;
+        }
+        const members = group.members.filter(c => Model.actionsFor(c).stop && !busy[c.id]);
+        confirm(`${label} stoppen?`, `${members.length} aktive Container des Compose-Projekts werden einzeln mit „docker stop“ angehalten: ${members.map(containerName).join(", ")}. Container, Volumes und Netzwerke bleiben erhalten.`, "Stoppen", "media-playback-stop", () => act("stop", members, label));
+    }
+
+    function downGroup(group) {
+        const label = projectName(group.project);
+        confirm(`${label} herunterfahren?`, `„docker compose down“ stoppt das Projekt und entfernt seine Container und Netzwerke. Die Daten in benannten Volumes bleiben erhalten; der nächste Start legt die Container neu an.`, "Herunterfahren", "system-shutdown-symbolic", () => compose(group, "down"));
     }
 
     function stopContainer(container) {
-        confirmStop([container], containerName(container), `„${container.name}“ wird mit „docker stop“ angehalten. Der Container bleibt erhalten und lässt sich wieder starten.`);
+        const label = containerName(container);
+        confirm(`${label} stoppen?`, `„${container.name}“ wird mit „docker stop“ angehalten. Der Container bleibt erhalten und lässt sich wieder starten.`, "Stoppen", "media-playback-stop", () => act("stop", [container], label));
     }
 
     function confirmRemove(targets, label) {
@@ -468,15 +490,13 @@ Kirigami.ApplicationWindow {
 
     Kirigami.PromptDialog {
         id: stopConfirm
-        property var targets: []
-        property string label: ""
+        property var onConfirm: null
+        property string buttonText: ""
+        property string buttonIcon: ""
         standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
-        onAccepted: root.act("stop", targets, label)
-        Component.onCompleted: {
-            const ok = standardButton(Kirigami.Dialog.Ok);
-            ok.text = "Stoppen";
-            ok.icon.name = "media-playback-stop";
-        }
+        onAccepted: onConfirm()
+        onButtonTextChanged: standardButton(Kirigami.Dialog.Ok).text = buttonText
+        onButtonIconChanged: standardButton(Kirigami.Dialog.Ok).icon.name = buttonIcon
     }
 
     Kirigami.PromptDialog {
@@ -695,7 +715,7 @@ Kirigami.ApplicationWindow {
             icon.name: "view-refresh"
             visible: menu.canRestart
             height: visible ? implicitHeight : 0
-            onTriggered: root.act("restart", menu.forContainer ? [menu.container] : menu.members.filter(c => Model.actionsFor(c).restart), menu.label)
+            onTriggered: menu.forContainer ? root.act("restart", [menu.container], menu.label) : root.restartProject(menu.group)
         }
         QQC2.MenuItem {
             text: "Stoppen…"
@@ -703,6 +723,13 @@ Kirigami.ApplicationWindow {
             visible: menu.canStop
             height: visible ? implicitHeight : 0
             onTriggered: menu.forContainer ? root.stopContainer(menu.container) : root.stopGroup(menu.group)
+        }
+        QQC2.MenuItem {
+            text: "Herunterfahren…"
+            icon.name: "system-shutdown-symbolic"
+            visible: menu.isProject && menu.members.length > 0 && root.remembered[menu.group.project] !== undefined
+            height: visible ? implicitHeight : 0
+            onTriggered: root.downGroup(menu.group)
         }
         QQC2.MenuSeparator {
             visible: menu.forContainer

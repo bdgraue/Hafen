@@ -65,10 +65,24 @@ export function composeSources(containers) {
   return sources;
 }
 
-export function composeUpArgs(project, source) {
+// `docker compose` with the project's own directory and files, so it acts on the project as Compose knows it:
+// in dependency order, including services whose containers are gone.
+export function composeArgs(project, source, command) {
   if (!source?.workingDir || !source.configFiles?.length) throw new Error(`Für ${project} ist kein Compose-Verzeichnis gespeichert.`);
   return ["compose", "--project-name", project, "--project-directory", source.workingDir,
-    ...source.configFiles.flatMap(file => ["--file", file]), "up", "--detach"];
+    ...source.configFiles.flatMap(file => ["--file", file]), ...command];
+}
+
+export const COMPOSE_COMMANDS = {
+  start: ["up", "--detach"],
+  stop: ["stop"],
+  restart: ["restart"],
+  // Without --volumes: networks and containers go, the data in named volumes stays.
+  down: ["down"],
+};
+
+export function composeUpArgs(project, source) {
+  return composeArgs(project, source, COMPOSE_COMMANDS.start);
 }
 
 // Remembered projects without any container left still get a group, so they can be started again.
@@ -277,6 +291,7 @@ export const ACTIONS = {
   unpause: { args: id => ["unpause", id], done: "fortgesetzt", failed: "Fortsetzen" },
   // Plain `docker rm`: no --force for anything still running, no --volumes, so every volume survives.
   remove: { args: id => ["rm", id], done: "gelöscht", failed: "Löschen" },
+  down: { args: () => { throw new Error("down gibt es nur für Compose-Projekte."); }, done: "heruntergefahren", failed: "Herunterfahren" },
 };
 
 export function actionArgs(action, id) {

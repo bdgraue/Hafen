@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   parseContainers, groupContainers, groupHealth, statusColor, containerTooltip, shortName, uptime, actionSummary,
-  composeSources, composeUpArgs, splitSections, actionsFor, actionArgs, condition, publishedPorts, splitCommand,
+  composeSources, composeUpArgs, composeArgs, COMPOSE_COMMANDS, splitSections, actionsFor, actionArgs, condition, publishedPorts, splitCommand,
   logsCommand, shellCommand, describeError, NOT_STARTED, parseSize, parseStats, statsTotal, formatBytes, formatPercent, isNewer,
 } from "../src/model.mjs";
 
@@ -50,6 +50,9 @@ test("compose sources come from the labels and build a compose up command", () =
     "compose", "--project-name", "shop", "--project-directory", "/srv/shop",
     "--file", "/srv/shop/compose.yaml", "--file", "/srv/shop/compose.override.yaml", "up", "--detach",
   ]);
+  assert.deepEqual(composeArgs("shop", sources.shop, COMPOSE_COMMANDS.down).slice(-1), ["down"]);
+  assert.deepEqual(composeArgs("shop", sources.shop, COMPOSE_COMMANDS.stop).slice(-1), ["stop"]);
+  assert.throws(() => actionArgs("down", "abc"), /Compose/);
   assert.throws(() => composeUpArgs("blog", undefined), /blog/);
   assert.throws(() => composeUpArgs("blog", { workingDir: "/srv/blog", configFiles: [] }), /blog/);
 });
