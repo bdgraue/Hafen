@@ -1,1 +1,4 @@
 build/
+# Local settings with project paths; Hafen keeps them in ~/.config/hafen/, never in the repo.
+hafen.conf
+*.conf
