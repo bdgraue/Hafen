@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.21)
-project(hafen VERSION 0.2.0 LANGUAGES CXX
+project(hafen VERSION 0.3.0 LANGUAGES CXX
     DESCRIPTION "Docker-Container nach Compose-Projekt im Tray"
     HOMEPAGE_URL "https://github.com/bdgraue/Hafen")
 

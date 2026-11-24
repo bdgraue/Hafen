@@ -14,7 +14,7 @@ Jedes Release enthält ein `.deb` pro Ubuntu-Version. Unter
 herunterladen und installieren:
 
 ```sh
-sudo apt install ./hafen_0.2.0_ubuntu26.10_amd64.deb
+sudo apt install ./hafen_0.3.0_ubuntu26.10_amd64.deb
 ```
 
 Hafen steht danach im Anwendungsmenü. Für ein Update installierst du das neue
@@ -24,12 +24,13 @@ mit `sudo apt remove hafen`.
 
 ### Aus dem Quellcode
 
-Benötigt werden CMake, Qt ≥ 6.5 (Base, Declarative), KF6 Kirigami,
-KF6 StatusNotifierItem und KF6 DBusAddons. Unter Ubuntu installierst du sie so:
+Benötigt werden CMake, Qt ≥ 6.5 (Base, Declarative, Linguist-Werkzeuge),
+KF6 Kirigami, KF6 StatusNotifierItem und KF6 DBusAddons. Unter Ubuntu
+installierst du sie so:
 
 ```sh
 sudo apt install cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools \
-  libkirigami-dev libkf6statusnotifieritem-dev libkf6dbusaddons-dev
+  qt6-tools-dev qt6-l10n-tools libkirigami-dev libkf6statusnotifieritem-dev libkf6dbusaddons-dev
 ```
 
 Bauen und für den eigenen Benutzer installieren:
@@ -61,13 +62,27 @@ Laufzeitvoraussetzungen: das Docker-CLI mit Compose v2. Dein Benutzer muss
   Container werden fortgesetzt statt gestartet. Löschen gibt es nur für
   erstellte, beendete und tote Container. Container in einer Neustart-Schleife,
   tote Container und fehlgeschlagene Healthchecks sind markiert.
+- Änderungen erscheinen sofort: Hafen liest den Ereignisstrom von
+  `docker events` mit. Ein Container, den du im Terminal stoppst, ist ohne
+  Verzögerung als gestoppt markiert. Solange der Strom läuft, liest Hafen
+  sonst nur alle 30 Sekunden neu ein, im Tray alle 120 Sekunden. Bricht der
+  Strom ab, verbindet Hafen nach 5 Sekunden neu und liest bis dahin alle 5
+  bzw. 30 Sekunden ein. Wird das Fenster wieder aktiv, liest es sofort neu ein.
+- Ein Suchfeld filtert nach Projekt- und Containernamen, auch nach eigenen
+  Anzeigenamen. Jedes Wort muss vorkommen.
 - Gruppen zeigen „aktiv/gesamt“, Container ihre Lauf- bzw. Stoppzeit. Beim
   Überfahren erscheint daneben ein Start- oder Stopp-Knopf, ohne dass sich das
   Layout verschiebt. Gestoppt wird erst nach einer Bestätigung.
 - Das Rechtsklick-Menü bietet:
-  - Starten, Fortsetzen, Neu starten und Stoppen…
-  - Logs anzeigen und Shell öffnen im eingestellten Terminal. Das Logfenster
-    bleibt nach dem Ende offen, bis du Enter drückst.
+  - Starten, Fortsetzen, Neu starten und Stoppen… Kennt Hafen die
+    Compose-Dateien eines Projekts, laufen diese Aktionen über
+    `docker compose up`, `stop` und `restart`, also in der Reihenfolge der
+    Abhängigkeiten.
+  - Herunterfahren…: `docker compose down` ohne `--volumes`. Container und
+    Netzwerke werden entfernt, die Daten in Volumes bleiben.
+  - Logs anzeigen, für ein Compose-Projekt auch die Logs aller Container, und
+    Shell öffnen, jeweils im eingestellten Terminal. Das Logfenster bleibt
+    nach dem Ende offen, bis du Enter drückst.
   - Veröffentlichte Ports im Browser öffnen
   - Projektordner öffnen
   - Name und Farbe…: Anzeigename und Farbe gelten nur in Hafen.
@@ -86,22 +101,64 @@ Laufzeitvoraussetzungen: das Docker-CLI mit Compose v2. Dein Benutzer muss
     läuft auf einem eigenen Timer alle 10 Sekunden und nur bei sichtbarem
     Fenster. Der Gesamtwert ist auf alle Kerne und den ganzen Arbeitsspeicher
     bezogen.
+  - Docker-Kontext: Er gilt nur für Hafen und wird jedem Aufruf als
+    `--context` mitgegeben, auch Terminal-Befehlen. Gemerkte Projekte liegen je
+    Kontext.
+  - Meldungen bei Abstürzen, Neustart-Schleifen, toten und kranken Containern.
+    Ein Exit-Code wie bei `docker stop` (0, 137, 143) gilt nicht als Absturz.
   - Autostart im Tray beim Anmelden
   - Suche nach neuen Versionen bei GitHub
-- Bei sichtbarem Fenster liest Hafen alle 5 Sekunden neu ein, im Tray alle
-  30 Sekunden. Wird das Fenster wieder aktiv, liest es sofort neu ein.
+- Speicherplatz: zeigt `docker system df` und räumt mit Bestätigung auf. Das
+  betrifft gestoppte Container, verwaiste oder alle ungenutzten Images und den
+  Build-Cache. Volumes löscht Hafen nicht, weil darin die Daten liegen.
 - Fehlermeldungen nennen die Ursache: Docker fehlt, der Dienst läuft nicht
   oder du hast keine Rechte am Socket. Antwortet Docker beim Einlesen
   20 Sekunden lang nicht, bricht Hafen die Abfrage ab und versucht es beim
   nächsten Takt erneut.
 - Tray-Icon: Ein Linksklick zeigt oder versteckt das Fenster. Ist Docker nicht
-  erreichbar oder ein Container auffällig, erscheint ein Warnsymbol.
+  erreichbar oder ein Container auffällig, erscheint ein Warnsymbol. Das
+  Rechtsklick-Menü listet die Compose-Projekte mit Starten, Neu starten und
+  Stoppen. Fürs Stoppen holt es das Fenster wegen der Bestätigung nach vorn.
   Schließen versteckt das Fenster nur. Es läuft nur eine Instanz, und
   `hafen --hidden` startet ohne Fenster.
+
+### Tastatur
+
+| Taste | Wirkung |
+|---|---|
+| ↑ ↓ | Markierung durch Gruppen und Container bewegen |
+| → ← | Gruppe auf- und zuklappen; ← springt vom Container zu seiner Gruppe |
+| Enter, Leertaste | Gruppe auf- und zuklappen bzw. Menü des Containers öffnen |
+| Menü-Taste | Menü der markierten Zeile öffnen |
+| Entf | Container löschen bzw. die gestoppten Container der Gruppe, mit Bestätigung |
+| L | Logs des Containers bzw. des Compose-Projekts |
+| Strg+F | ins Suchfeld; ↓ wechselt von dort in die Liste, Esc leert es |
+| F5 | sofort neu einlesen |
 
 Die Einstellungen liegen in `~/.config/hafen/hafen.conf`. Netzwerkzugriff gibt
 es nur für die Update-Suche, eine Anfrage an `api.github.com` beim Start, und
 die lässt sich abschalten.
+
+## Sprachen und Übersetzungen
+
+Die Texte im Quellcode sind englisch. Übersetzungen liegen als
+Qt-Linguist-Dateien in `i18n/hafen_<sprache>.ts`, mitgeliefert ist Deutsch.
+Hafen lädt die Übersetzung, die zur Systemsprache passt, und bleibt sonst
+englisch.
+
+Eine neue Sprache, hier Französisch, kommt so dazu:
+
+```sh
+/usr/lib/qt6/bin/lupdate -locations none -source-language en -target-language fr \
+  src -ts i18n/hafen_fr.ts
+linguist i18n/hafen_fr.ts   # oder die Datei mit einem anderen .ts-Editor übersetzen
+cmake -S . -B build && cmake --build build
+```
+
+CMake findet jede Datei `i18n/hafen_*.ts` von selbst und kompiliert sie ein.
+Neue oder geänderte Texte im Code überträgt
+`cmake --build build --target update_translations` in alle Sprachdateien.
+Übersetzungen nehme ich gern als Pull Request an.
 
 ## Entwicklung
 
