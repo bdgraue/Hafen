@@ -96,7 +96,8 @@ export function groupContainers(containers, remembered = {}) {
     if (!groups.has(project)) groups.set(project, []);
   }
   return [...groups]
-    .sort(([a], [b]) => a.localeCompare(b))
+    // Qt's JavaScript engine mis-sorts with destructured comparator parameters, so the entries are indexed.
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([project, members]) => ({ project, members, active: members.filter(isActive) }));
 }
 
@@ -182,7 +183,7 @@ export function publishedPorts(ports) {
       if (!seen.has(port)) seen.set(port, `http://${host}:${port}`);
     }
   }
-  return [...seen].sort(([a], [b]) => a - b).map(([port, url]) => ({ port, url }));
+  return [...seen].sort((a, b) => a[0] - b[0]).map(([port, url]) => ({ port, url }));
 }
 
 // Splits a terminal command such as `flatpak run org.kde.kwi -e` into argv. Quotes group words; nothing else is special.
@@ -367,7 +368,8 @@ export const stripFieldCodes = exec => exec.replace(/(^|\s)%[fFuUdDnNickvm](?=\s
 // known for terminals listed above, and for the rest "-e" is a guess, the same default xdg-terminal-exec assumes.
 export function terminalCandidates(entries, has) {
   const seen = new Set(), found = [];
-  for (const { id, content } of entries) {
+  for (const entry of entries) {
+    const id = entry.id, content = entry.content;
     if (seen.has(id)) continue;
     seen.add(id);
     const e = parseDesktopEntry(content);
