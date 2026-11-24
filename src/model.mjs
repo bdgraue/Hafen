@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Hafen contributors
 
 // Runs inside Qt's JavaScript engine as well as under Node for the tests: no object spread, no Node APIs.
+// Texts go through qsTr so lupdate finds them (context "model"); the tests provide qsTr and String.prototype.arg.
 
 export const REFRESH_MS = 5000;
 // Hidden in the tray only the warning overlay needs fresh data; showing the window reads at once.
@@ -31,7 +32,7 @@ export function parseContainers(stdout) {
   return stdout.split(/\r?\n/).filter(line => line.trim()).map(line => {
     const row = JSON.parse(line);
     for (const key of FIELDS) {
-      if (typeof row[key] !== "string") throw new Error("Ungültige Docker-Antwort");
+      if (typeof row[key] !== "string") throw new Error(qsTr("Docker sent an unexpected answer."));
     }
     return row;
   }).sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name));
@@ -68,7 +69,7 @@ export function composeSources(containers) {
 // `docker compose` with the project's own directory and files, so it acts on the project as Compose knows it:
 // in dependency order, including services whose containers are gone.
 export function composeArgs(project, source, command) {
-  if (!source?.workingDir || !source.configFiles?.length) throw new Error(`Für ${project} ist kein Compose-Verzeichnis gespeichert.`);
+  if (!source?.workingDir || !source.configFiles?.length) throw new Error(qsTr("No Compose directory is stored for %1.").arg(project));
   return ["compose", "--project-name", project, "--project-directory", source.workingDir,
     ...source.configFiles.flatMap(file => ["--file", file]), ...command];
 }
@@ -144,7 +145,7 @@ export function statusColor(container, t) {
 }
 
 export function containerTooltip(container) {
-  return [container.name, container.image, container.status, `Ports: ${container.ports || "keine"}`].join("\n");
+  return [container.name, container.image, container.status, qsTr("Ports: %1").arg(container.ports || qsTr("none"))].join("\n");
 }
 
 // Inside its project's group, "shop-web-1" reads as "web-1".
@@ -204,9 +205,9 @@ export function splitCommand(command) {
       word = (word ?? "") + ch;
     }
   }
-  if (quote) throw new Error(`Im Terminal-Befehl fehlt ein schließendes ${quote}.`);
+  if (quote) throw new Error(qsTr("The terminal command lacks a closing %1.").arg(quote));
   if (word !== null) words.push(word);
-  if (!words.length) throw new Error("Kein Terminal eingestellt. In den Einstellungen einen Terminal-Befehl angeben.");
+  if (!words.length) throw new Error(qsTr("No terminal is set. Enter a terminal command in the settings."));
   return words;
 }
 
@@ -236,22 +237,22 @@ export const NOT_STARTED = -2;
 export function describeError(code, stderr) {
   const text = stderr.trim();
   if (code === NOT_STARTED) {
-    return { title: "Docker ist nicht installiert", detail: `Das Programm docker wurde nicht gefunden. ${text}` };
+    return { title: qsTr("Docker is not installed"), detail: qsTr("The docker program was not found. %1").arg(text) };
   }
   if (/permission denied/i.test(text)) {
-    return { title: "Keine Rechte am Docker-Socket", detail: `Den Benutzer in die Gruppe docker aufnehmen und neu anmelden. ${text}` };
+    return { title: qsTr("No permission on the Docker socket"), detail: qsTr("Add the user to the docker group and log in again. %1").arg(text) };
   }
   if (/failed to connect to the docker API|Cannot connect to the Docker daemon|Is the docker daemon running/i.test(text)) {
-    return { title: "Docker-Dienst läuft nicht", detail: text };
+    return { title: qsTr("The Docker daemon is not running"), detail: text };
   }
-  return { title: "Docker nicht erreichbar", detail: text || `Exit ${code}` };
+  return { title: qsTr("Docker is not reachable"), detail: text || qsTr("Exit code %1").arg(code) };
 }
 
 const SIZE_UNITS = { B: 1, kB: 1e3, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12, KiB: 1024, MiB: 1024 ** 2, GiB: 1024 ** 3, TiB: 1024 ** 4 };
 
 export function parseSize(text) {
   const m = text.trim().match(/^([\d.]+)\s*([kKMGT]?i?B)$/);
-  if (!m || !(m[2] in SIZE_UNITS)) throw new Error(`Unbekannte Größe von Docker: ${text}`);
+  if (!m || !(m[2] in SIZE_UNITS)) throw new Error(qsTr("Docker reported an unknown size: %1").arg(text));
   return Number(m[1]) * SIZE_UNITS[m[2]];
 }
 
@@ -261,9 +262,9 @@ export function parseStats(stdout) {
   for (const line of stdout.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const row = JSON.parse(line);
-    if (typeof row.id !== "string" || typeof row.cpu !== "string" || typeof row.mem !== "string") throw new Error("Ungültige Antwort von docker stats");
+    if (typeof row.id !== "string" || typeof row.cpu !== "string" || typeof row.mem !== "string") throw new Error(qsTr("docker stats sent an unexpected answer."));
     const cpu = Number(row.cpu.replace("%", ""));
-    if (!Number.isFinite(cpu)) throw new Error(`Ungültiger CPU-Wert von docker stats: ${row.cpu}`);
+    if (!Number.isFinite(cpu)) throw new Error(qsTr("docker stats sent an invalid CPU value: %1").arg(row.cpu));
     stats[row.id] = { cpu, mem: parseSize(row.mem.split("/")[0]) };
   }
   return stats;
@@ -271,7 +272,7 @@ export function parseStats(stdout) {
 
 // The total reads as "how much of this machine": CPU against every core, memory against all of it.
 export function statsTotal(stats, cores, memTotal) {
-  if (!(cores > 0) || !(memTotal > 0)) throw new Error("Kerne und Arbeitsspeicher des Rechners sind unbekannt.");
+  if (!(cores > 0) || !(memTotal > 0)) throw new Error(qsTr("The number of cores and the memory of this machine are unknown."));
   let cpu = 0, mem = 0;
   for (const id in stats) {
     cpu += stats[id].cpu;
@@ -292,33 +293,38 @@ export function formatBytes(bytes) {
 
 export const formatPercent = value => `${value >= 10 ? Math.round(value) : value.toFixed(1)} %`;
 
-const firstLine = text => (text.trim().split("\n")[0] || "unbekannter Fehler").slice(0, 200);
+const firstLine = text => (text.trim().split("\n")[0] || qsTr("unknown error")).slice(0, 200);
 
+// Whole sentences per action, so every language can order its words: %1 the label, %2 done, %3 attempted.
 export const ACTIONS = {
-  start: { args: id => ["start", id], done: "gestartet", failed: "Starten" },
-  stop: { args: id => ["stop", id], done: "gestoppt", failed: "Stoppen" },
-  restart: { args: id => ["restart", id], done: "neu gestartet", failed: "Neustarten" },
-  unpause: { args: id => ["unpause", id], done: "fortgesetzt", failed: "Fortsetzen" },
+  start: { args: id => ["start", id], partly: () => qsTr("%1: %2 of %3 containers started"), failed: () => qsTr("%1: Starting failed") },
+  stop: { args: id => ["stop", id], partly: () => qsTr("%1: %2 of %3 containers stopped"), failed: () => qsTr("%1: Stopping failed") },
+  restart: { args: id => ["restart", id], partly: () => qsTr("%1: %2 of %3 containers restarted"), failed: () => qsTr("%1: Restarting failed") },
+  unpause: { args: id => ["unpause", id], partly: () => qsTr("%1: %2 of %3 containers resumed"), failed: () => qsTr("%1: Resuming failed") },
   // Plain `docker rm`: no --force for anything still running, no --volumes, so every volume survives.
-  remove: { args: id => ["rm", id], done: "gelöscht", failed: "Löschen" },
-  down: { args: () => { throw new Error("down gibt es nur für Compose-Projekte."); }, done: "heruntergefahren", failed: "Herunterfahren" },
+  remove: { args: id => ["rm", id], partly: () => qsTr("%1: %2 of %3 containers removed"), failed: () => qsTr("%1: Removing failed") },
+  down: {
+    args: () => { throw new Error(qsTr("Shutting down works only for Compose projects.")); },
+    partly: () => qsTr("%1: %2 of %3 containers shut down"),
+    failed: () => qsTr("%1: Shutting down failed"),
+  },
 };
 
 export function actionArgs(action, id) {
   const known = ACTIONS[action];
-  if (!known) throw new Error(`Unbekannte Aktion: ${action}`);
+  if (!known) throw new Error(qsTr("Unknown action: %1").arg(action));
   return known.args(id);
 }
 
 // A notification for actions that went wrong; null when every container did what was asked.
 export function actionSummary(action, label, results) {
-  const verb = ACTIONS[action];
-  if (!verb) throw new Error(`Unbekannte Aktion: ${action}`);
+  const known = ACTIONS[action];
+  if (!known) throw new Error(qsTr("Unknown action: %1").arg(action));
   const failed = results.filter(r => r.error);
   if (!failed.length) return null;
   const done = results.length - failed.length;
   return {
-    title: done ? `${label}: ${done} von ${results.length} Containern ${verb.done}` : `${label}: ${verb.failed} fehlgeschlagen`,
+    title: done ? known.partly().arg(label).arg(done).arg(results.length) : known.failed().arg(label),
     body: failed.map(r => `${r.name}: ${firstLine(r.error)}`).join("\n"),
     level: done ? "warning" : "error",
   };
@@ -328,7 +334,7 @@ export function actionSummary(action, label, results) {
 export function isNewer(release, current) {
   const parse = v => {
     const m = String(v).trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/);
-    if (!m) throw new Error(`Ungültige Versionsnummer: ${v}`);
+    if (!m) throw new Error(qsTr("Invalid version number: %1").arg(v));
     return m.slice(1).map(Number);
   };
   const a = parse(release), b = parse(current);
@@ -382,9 +388,9 @@ export function terminalCandidates(entries, has) {
     found.push({ id, label: e.Name, command: arg ? `${exec} ${arg}` : exec, verified: declared !== undefined || id in VERIFIED_EXEC_ARG });
   }
   // Debian policy 11.8.3 requires x-terminal-emulator to run "-e command args…" like execvp.
-  if (has("x-terminal-emulator")) found.push({ id: "x-terminal-emulator", label: "Standard-Terminal (x-terminal-emulator)", command: "x-terminal-emulator -e", verified: true });
+  if (has("x-terminal-emulator")) found.push({ id: "x-terminal-emulator", label: qsTr("Default terminal (x-terminal-emulator)"), command: "x-terminal-emulator -e", verified: true });
   // xdg-terminal-exec takes the command directly and opens the terminal chosen in xdg-terminals.list.
-  if (has("xdg-terminal-exec")) found.push({ id: "xdg-terminal-exec", label: "Standard-Terminal (xdg-terminal-exec)", command: "xdg-terminal-exec", verified: true });
+  if (has("xdg-terminal-exec")) found.push({ id: "xdg-terminal-exec", label: qsTr("Default terminal (xdg-terminal-exec)"), command: "xdg-terminal-exec", verified: true });
   return found.sort((a, b) => Number(b.verified) - Number(a.verified));
 }
 
@@ -445,7 +451,7 @@ export function parseDiskUsage(stdout) {
   return stdout.split(/\r?\n/).filter(line => line.trim()).map(line => {
     const row = JSON.parse(line);
     for (const key of ["Type", "TotalCount", "Active", "Size", "Reclaimable"]) {
-      if (typeof row[key] !== "string") throw new Error("Ungültige Antwort von docker system df");
+      if (typeof row[key] !== "string") throw new Error(qsTr("docker system df sent an unexpected answer."));
     }
     return { type: row.Type, total: row.TotalCount, active: row.Active, size: row.Size, reclaimable: row.Reclaimable };
   });
@@ -470,7 +476,7 @@ export const CONTEXT_ARGS = ["context", "ls", "--format", "{{json .}}"];
 export function parseContexts(stdout) {
   return stdout.split(/\r?\n/).filter(line => line.trim()).map(line => {
     const row = JSON.parse(line);
-    if (typeof row.Name !== "string" || typeof row.Current !== "boolean") throw new Error("Ungültige Antwort von docker context ls");
+    if (typeof row.Name !== "string" || typeof row.Current !== "boolean") throw new Error(qsTr("docker context ls sent an unexpected answer."));
     return { name: row.Name, current: row.Current, endpoint: String(row.DockerEndpoint ?? ""), error: String(row.Error ?? "") };
   });
 }

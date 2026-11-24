@@ -31,14 +31,14 @@ Launcher::Launcher(QObject *parent)
 QString Launcher::detached(const QStringList &argv)
 {
     if (argv.isEmpty()) {
-        return QStringLiteral("Kein Programm angegeben.");
+        return tr("No program given.");
     }
     const QString program = QStandardPaths::findExecutable(argv.first());
     if (program.isEmpty()) {
-        return QStringLiteral("%1 wurde nicht gefunden.").arg(argv.first());
+        return tr("%1 was not found.").arg(argv.first());
     }
     if (!QProcess::startDetached(program, argv.mid(1))) {
-        return QStringLiteral("%1 ließ sich nicht starten.").arg(argv.first());
+        return tr("%1 could not be started.").arg(argv.first());
     }
     return QString();
 }
@@ -97,7 +97,7 @@ void Launcher::checkForUpdate()
         const QString tag = release.value(QStringLiteral("tag_name")).toString();
         const QString url = release.value(QStringLiteral("html_url")).toString();
         if (tag.isEmpty() || url.isEmpty()) {
-            Q_EMIT updateFailed(QStringLiteral("GitHub hat keine Versionsangabe geliefert."));
+            Q_EMIT updateFailed(tr("GitHub did not report a version."));
             return;
         }
         Q_EMIT updateChecked(tag, url);
@@ -133,19 +133,19 @@ void Launcher::setAutostart(bool enabled)
     const QString path = autostartFile();
     if (!enabled) {
         if (!QFile::remove(path)) {
-            Q_EMIT autostartFailed(QStringLiteral("%1 ließ sich nicht löschen.").arg(path));
+            Q_EMIT autostartFailed(tr("%1 could not be removed.").arg(path));
         }
         Q_EMIT autostartChanged();
         return;
     }
     if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
-        Q_EMIT autostartFailed(QStringLiteral("Der Ordner für %1 ließ sich nicht anlegen.").arg(path));
+        Q_EMIT autostartFailed(tr("The folder for %1 could not be created.").arg(path));
         Q_EMIT autostartChanged();
         return;
     }
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        Q_EMIT autostartFailed(QStringLiteral("%1 ließ sich nicht schreiben: %2").arg(path, file.errorString()));
+        Q_EMIT autostartFailed(tr("%1 could not be written: %2").arg(path, file.errorString()));
         Q_EMIT autostartChanged();
         return;
     }

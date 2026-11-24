@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Hafen contributors
 
+import "./setup.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -78,8 +79,8 @@ test("action summary stays quiet on success and names partial and total failures
   const ok = { name: "shop-a", error: null };
   const bad = { name: "shop-b", error: "Error response from daemon: boom\nmore" };
   assert.equal(actionSummary("stop", "shop", [ok]), null);
-  assert.deepEqual(actionSummary("stop", "shop", [ok, bad]), { title: "shop: 1 von 2 Containern gestoppt", body: "shop-b: Error response from daemon: boom", level: "warning" });
-  assert.equal(actionSummary("start", "shop", [bad]).title, "shop: Starten fehlgeschlagen");
+  assert.deepEqual(actionSummary("stop", "shop", [ok, bad]), { title: "shop: 1 of 2 containers stopped", body: "shop-b: Error response from daemon: boom", level: "warning" });
+  assert.equal(actionSummary("start", "shop", [bad]).title, "shop: Starting failed");
   assert.equal(actionSummary("restart", "shop", [bad]).level, "error");
   assert.throws(() => actionSummary("pause", "shop", [bad]), /pause/);
 });
@@ -120,8 +121,8 @@ test("terminal commands split into argv and fail without a terminal", () => {
   assert.deepEqual(splitCommand("flatpak run org.kde.kwi -e"), ["flatpak", "run", "org.kde.kwi", "-e"]);
   assert.deepEqual(splitCommand(` "/opt/my term/bin" --title 'Hafen Logs' -e `), ["/opt/my term/bin", "--title", "Hafen Logs", "-e"]);
   assert.deepEqual(splitCommand(`term ""`), ["term", ""]);
-  assert.throws(() => splitCommand("   "), /Kein Terminal/);
-  assert.throws(() => splitCommand(`term "open`), /schließendes/);
+  assert.throws(() => splitCommand("   "), /No terminal/);
+  assert.throws(() => splitCommand(`term "open`), /closing/);
   const c = container("abc", "shop");
   assert.deepEqual(logsCommand(c, [], "Ende"), ["sh", "-c", '"$@"; printf "\\n— %s —" "$0"; read -r _', "Ende", "docker", "logs", "--follow", "--tail", "200", "abc"]);
   assert.deepEqual(logsCommand(c, ["--context", "remote"], "Ende").slice(4, 8), ["docker", "--context", "remote", "logs"]);
@@ -131,25 +132,25 @@ test("terminal commands split into argv and fail without a terminal", () => {
 });
 
 test("Docker errors name their cause", () => {
-  assert.equal(describeError(NOT_STARTED, "execvp: No such file").title, "Docker ist nicht installiert");
-  assert.equal(describeError(1, "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock").title, "Keine Rechte am Docker-Socket");
-  assert.equal(describeError(1, "failed to connect to the docker API at unix:///x.sock; check if the path is correct and if the daemon is running").title, "Docker-Dienst läuft nicht");
-  assert.equal(describeError(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?").title, "Docker-Dienst läuft nicht");
-  assert.deepEqual(describeError(1, ""), { title: "Docker nicht erreichbar", detail: "Exit 1" });
+  assert.equal(describeError(NOT_STARTED, "execvp: No such file").title, "Docker is not installed");
+  assert.equal(describeError(1, "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock").title, "No permission on the Docker socket");
+  assert.equal(describeError(1, "failed to connect to the docker API at unix:///x.sock; check if the path is correct and if the daemon is running").title, "The Docker daemon is not running");
+  assert.equal(describeError(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?").title, "The Docker daemon is not running");
+  assert.deepEqual(describeError(1, ""), { title: "Docker is not reachable", detail: "Exit code 1" });
 });
 
 test("docker stats are parsed and totalled against the whole machine", () => {
   assert.equal(parseSize("513.8MiB"), 513.8 * 1024 ** 2);
   assert.equal(parseSize("1.5GB"), 1.5e9);
   assert.equal(parseSize("0B"), 0);
-  assert.throws(() => parseSize("lots"), /Größe/);
+  assert.throws(() => parseSize("lots"), /unknown size/);
   const stats = parseStats('{"id":"a","cpu":"13.17%","mem":"513.8MiB / 60.43GiB"}\n{"id":"b","cpu":"0.00%","mem":"6.801MiB / 60.43GiB"}\n');
   assert.deepEqual(Object.keys(stats), ["a", "b"]);
   assert.equal(stats.a.cpu, 13.17);
   assert.throws(() => parseStats('{"id":"a","cpu":"--","mem":"1MiB / 2GiB"}'), /CPU/);
   const total = statsTotal({ a: { cpu: 150, mem: 1024 ** 3 }, b: { cpu: 50, mem: 1024 ** 3 } }, 8, 16 * 1024 ** 3);
   assert.deepEqual(total, { cpu: 25, mem: 2 * 1024 ** 3, memShare: 12.5 });
-  assert.throws(() => statsTotal({}, 0, 1), /unbekannt/);
+  assert.throws(() => statsTotal({}, 0, 1), /unknown/);
   assert.equal(formatBytes(513.8 * 1024 ** 2), "514 MiB");
   assert.equal(formatBytes(1.5 * 1024 ** 3), "1.5 GiB");
   assert.equal(formatPercent(3.14159), "3.1 %");
@@ -161,7 +162,7 @@ test("release tags are compared as versions", () => {
   assert.equal(isNewer("v0.2.0", "0.2.0"), false);
   assert.equal(isNewer("0.10.0", "0.9.9"), true);
   assert.equal(isNewer("v0.1.9", "0.2.0"), false);
-  assert.throws(() => isNewer("latest", "0.2.0"), /Versionsnummer/);
+  assert.throws(() => isNewer("latest", "0.2.0"), /version number/);
 });
 
 test("terminals come from desktop entries, with their command option when it is known", async () => {
@@ -184,7 +185,7 @@ test("terminals come from desktop entries, with their command option when it is 
     ["Kwi", "/usr/bin/flatpak run --branch=master --arch=x86_64 --command=kwi org.kde.kwi -e", true],
     ["Foo", "foo --single --", true],
     ["Bare", "bare", true],
-    ["Standard-Terminal (x-terminal-emulator)", "x-terminal-emulator -e", true],
+    ["Default terminal (x-terminal-emulator)", "x-terminal-emulator -e", true],
     ["Guess", "guess -e", false],
   ]);
   assert.equal(stripFieldCodes("app %F --x 100%% %i"), "app --x 100%");

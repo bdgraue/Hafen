@@ -101,7 +101,7 @@ Kirigami.ApplicationWindow {
             done: Kirigami.Theme.positiveTextColor,
             stopped: Kirigami.Theme.disabledTextColor
         })
-    readonly property string logsEnd: "Ende der Logs. Enter schließt das Fenster."
+    readonly property string logsEnd: qsTr("End of the logs. Enter closes the window.")
     readonly property var swatches: ["#22a99a", "#e3814f", "#5b8def", "#8b7cf6", "#3fae6a", "#d9649a", "#d4a72c", "#e05252", "#7a8796"]
 
     title: "Hafen"
@@ -189,7 +189,7 @@ Kirigami.ApplicationWindow {
         }
         window: root
         warning: root.errorTitle !== "" || root.containers.some(c => Model.condition(c) === "unhealthy")
-        subtitle: root.errorTitle ? `${root.errorTitle}\n${root.errorDetail}` : root.loaded ? `${root.activeCount} aktive Container` : "Container werden geladen…"
+        subtitle: root.errorTitle ? `${root.errorTitle}\n${root.errorDetail}` : root.loaded ? qsTr("%1 active containers").arg(root.activeCount) : qsTr("Loading containers…")
     }
 
     Timer {
@@ -243,16 +243,16 @@ Kirigami.ApplicationWindow {
                 url
             } : null;
             if (root.manualUpdateCheck && !newer)
-                tray.notify("Hafen ist aktuell", `Version ${Launcher.version}`, "dialog-information");
+                tray.notify(qsTr("Hafen is up to date"), qsTr("Version %1").arg(Launcher.version), "dialog-information");
             root.manualUpdateCheck = false;
         }
         function onUpdateFailed(message) {
             if (root.manualUpdateCheck)
-                tray.notify("Suche nach Updates fehlgeschlagen", message, "dialog-error");
+                tray.notify(qsTr("Checking for updates failed"), message, "dialog-error");
             root.manualUpdateCheck = false;
         }
         function onAutostartFailed(message) {
-            tray.notify("Autostart ließ sich nicht ändern", message, "dialog-error");
+            tray.notify(qsTr("Autostart could not be changed"), message, "dialog-error");
         }
     }
 
@@ -300,7 +300,7 @@ Kirigami.ApplicationWindow {
                 if (Object.keys(kept).length !== Object.keys(failed).length)
                     failed = kept;
             } catch (e) {
-                errorTitle = "Unerwartete Antwort von Docker";
+                errorTitle = qsTr("Unexpected answer from Docker");
                 errorDetail = String(e.message ?? e);
             } finally {
                 loading = false;
@@ -348,7 +348,7 @@ Kirigami.ApplicationWindow {
                 contexts = Model.parseContexts(stdout);
             } catch (e) {
                 contexts = [];
-                tray.notify("Docker-Kontexte nicht lesbar", String(e.message ?? e), "dialog-warning");
+                tray.notify(qsTr("Docker contexts could not be read"), String(e.message ?? e), "dialog-warning");
             }
         }, Model.READ_TIMEOUT_MS);
     }
@@ -372,15 +372,15 @@ Kirigami.ApplicationWindow {
             if (busy[p.container.id] !== undefined || busy[`project:${p.container.project}`] !== undefined)
                 continue;
             const name = containerName(p.container);
-            const where = p.container.project ? ` (${projectName(p.container.project)})` : "";
+            const who = p.container.project ? qsTr("%1 (%2)").arg(name).arg(projectName(p.container.project)) : name;
             if (p.kind === "crashed")
-                tray.notify(`${name}${where} ist abgestürzt`, `Der Container hat sich mit Code ${p.code} beendet.`, "dialog-error");
+                tray.notify(qsTr("%1 crashed").arg(who), qsTr("The container exited with code %1.").arg(p.code), "dialog-error");
             else if (p.kind === "restarting")
-                tray.notify(`${name}${where} startet ständig neu`, "Der Container läuft in einer Neustart-Schleife.", "dialog-warning");
+                tray.notify(qsTr("%1 keeps restarting").arg(who), qsTr("The container is stuck in a restart loop."), "dialog-warning");
             else if (p.kind === "dead")
-                tray.notify(`${name}${where} ist tot`, "Docker konnte den Container nicht sauber beenden.", "dialog-error");
+                tray.notify(qsTr("%1 is dead").arg(who), qsTr("Docker could not stop the container cleanly."), "dialog-error");
             else
-                tray.notify(`${name}${where} ist nicht gesund`, "Der Healthcheck des Containers schlägt fehl.", "dialog-warning");
+                tray.notify(qsTr("%1 is unhealthy").arg(who), qsTr("The container's healthcheck fails."), "dialog-warning");
         }
     }
 
@@ -402,7 +402,7 @@ Kirigami.ApplicationWindow {
     }
 
     function projectName(project) {
-        return custom[`project:${project}`]?.name || project || "Einzelne Container";
+        return custom[`project:${project}`]?.name || project || qsTr("Standalone containers");
     }
 
     function projectColor(project) {
@@ -437,7 +437,7 @@ Kirigami.ApplicationWindow {
             Docker.run(Model.actionArgs(action, container.id), (code, stdout, stderr) => {
                 const result = {
                     name: container.name,
-                    error: code === 0 ? null : (stderr.trim() || `Exit ${code}`)
+                    error: code === 0 ? null : (stderr.trim() || qsTr("Exit code %1").arg(code))
                 };
                 results.push(result);
                 busy = withKey(busy, container.id, undefined);
@@ -475,7 +475,7 @@ Kirigami.ApplicationWindow {
             report(action, label, [
                 {
                     name: `docker compose ${Model.COMPOSE_COMMANDS[action][0]}`,
-                    error: code === 0 ? null : (stderr.trim() || `Exit ${code}`)
+                    error: code === 0 ? null : (stderr.trim() || qsTr("Exit code %1").arg(code))
                 }
             ]);
         }, Model.NO_TIMEOUT);
@@ -505,7 +505,7 @@ Kirigami.ApplicationWindow {
     function launch(argv, what) {
         const problem = Launcher.detached(argv);
         if (problem)
-            tray.notify(`${what} ließ sich nicht öffnen`, problem, "dialog-error");
+            tray.notify(qsTr("%1 could not be opened").arg(what), problem, "dialog-error");
     }
 
     function inTerminal(command, what) {
@@ -513,7 +513,7 @@ Kirigami.ApplicationWindow {
         try {
             prefix = Model.splitCommand(settings.terminal);
         } catch (e) {
-            tray.notify(`${what} ließ sich nicht öffnen`, String(e.message ?? e), "dialog-error");
+            tray.notify(qsTr("%1 could not be opened").arg(what), String(e.message ?? e), "dialog-error");
             preferences.openSettings();
             return;
         }
@@ -532,28 +532,28 @@ Kirigami.ApplicationWindow {
     function stopGroup(group) {
         const label = projectName(group.project);
         if (remembered[group.project]) {
-            confirm(`${label} stoppen?`, `Das Compose-Projekt wird mit „docker compose stop“ angehalten, in der Reihenfolge seiner Abhängigkeiten. Container, Volumes und Netzwerke bleiben erhalten.`, "Stoppen", "media-playback-stop", () => compose(group, "stop"));
+            confirm(qsTr("Stop %1?").arg(label), qsTr("“docker compose stop” stops the Compose project in the order of its dependencies. Containers, volumes and networks are kept."), qsTr("Stop"), "media-playback-stop", () => compose(group, "stop"));
             return;
         }
         const members = group.members.filter(c => Model.actionsFor(c).stop && !busy[c.id]);
-        confirm(`${label} stoppen?`, `${members.length} aktive Container des Compose-Projekts werden einzeln mit „docker stop“ angehalten: ${members.map(containerName).join(", ")}. Container, Volumes und Netzwerke bleiben erhalten.`, "Stoppen", "media-playback-stop", () => act("stop", members, label));
+        confirm(qsTr("Stop %1?").arg(label), qsTr("Each active container of the Compose project is stopped with “docker stop”: %1. Containers, volumes and networks are kept.").arg(members.map(containerName).join(", ")), qsTr("Stop"), "media-playback-stop", () => act("stop", members, label));
     }
 
     function downGroup(group) {
         const label = projectName(group.project);
-        confirm(`${label} herunterfahren?`, `„docker compose down“ stoppt das Projekt und entfernt seine Container und Netzwerke. Die Daten in benannten Volumes bleiben erhalten; der nächste Start legt die Container neu an.`, "Herunterfahren", "system-shutdown-symbolic", () => compose(group, "down"));
+        confirm(qsTr("Shut down %1?").arg(label), qsTr("“docker compose down” stops the project and removes its containers and networks. The data in named volumes is kept; the next start creates the containers again."), qsTr("Shut down"), "system-shutdown-symbolic", () => compose(group, "down"));
     }
 
     function stopContainer(container) {
         const label = containerName(container);
-        confirm(`${label} stoppen?`, `„${container.name}“ wird mit „docker stop“ angehalten. Der Container bleibt erhalten und lässt sich wieder starten.`, "Stoppen", "media-playback-stop", () => act("stop", [container], label));
+        confirm(qsTr("Stop %1?").arg(label), qsTr("“%1” is stopped with “docker stop”. The container is kept and can be started again.").arg(container.name), qsTr("Stop"), "media-playback-stop", () => act("stop", [container], label));
     }
 
     function confirmRemove(targets, label) {
         removeConfirm.targets = targets;
         removeConfirm.label = label;
-        removeConfirm.title = targets.length === 1 ? `${containerName(targets[0])} löschen?` : `${targets.length} Container von ${label} löschen?`;
-        removeConfirm.subtitle = `${targets.map(c => c.name).join(", ")} ${targets.length === 1 ? "wird" : "werden"} mit „docker rm“ gelöscht. Images und Volumes bleiben erhalten; ein Compose-Projekt legt die Container beim nächsten Start neu an.`;
+        removeConfirm.title = targets.length === 1 ? qsTr("Remove %1?").arg(containerName(targets[0])) : qsTr("Remove %1 containers of %2?").arg(targets.length).arg(label);
+        removeConfirm.subtitle = qsTr("“docker rm” removes: %1. Images and volumes are kept; a Compose project creates its containers again on the next start.").arg(targets.map(c => c.name).join(", "));
         removeConfirm.open();
     }
 
@@ -615,7 +615,7 @@ Kirigami.ApplicationWindow {
         onOpened: standardButton(Kirigami.Dialog.Cancel).forceActiveFocus()
         Component.onCompleted: {
             const ok = standardButton(Kirigami.Dialog.Ok);
-            ok.text = "Löschen";
+            ok.text = qsTr("Remove");
             ok.icon.name = "edit-delete";
         }
     }
@@ -636,7 +636,7 @@ Kirigami.ApplicationWindow {
             nameField.forceActiveFocus();
         }
 
-        title: `${original} anpassen`
+        title: qsTr("Customize %1").arg(original)
         padding: Kirigami.Units.largeSpacing
         preferredWidth: Kirigami.Units.gridUnit * 18
         standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
@@ -667,7 +667,7 @@ Kirigami.ApplicationWindow {
                         implicitWidth: Kirigami.Units.iconSizes.medium
                         implicitHeight: implicitWidth
                         QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: modelData ? modelData : "Standardfarbe"
+                        QQC2.ToolTip.text: modelData ? modelData : qsTr("Default color")
                         onClicked: customize.chosenColor = modelData
 
                         background: Rectangle {
@@ -710,19 +710,19 @@ Kirigami.ApplicationWindow {
             Docker.run(Model.PRUNE[kind], (code, stdout, stderr) => {
                 pruning = "";
                 if (code === 0)
-                    tray.notify(`${label}: aufgeräumt`, `Freigegeben: ${Model.reclaimed(stdout) ?? "unbekannt"}`, "dialog-information");
+                    tray.notify(qsTr("%1: cleaned up").arg(label), qsTr("Freed: %1").arg(Model.reclaimed(stdout) ?? qsTr("unknown")), "dialog-information");
                 else
-                    tray.notify(`${label}: Aufräumen fehlgeschlagen`, stderr.trim() || `Exit ${code}`, "dialog-error");
+                    tray.notify(qsTr("%1: Cleaning up failed").arg(label), stderr.trim() || qsTr("Exit code %1").arg(code), "dialog-error");
                 load();
                 root.refresh(true);
             }, Model.NO_TIMEOUT);
         }
 
         function ask(kind, label, detail) {
-            root.confirm(`${label} aufräumen?`, detail, "Aufräumen", "edit-clear-all", () => prune(kind, label));
+            root.confirm(qsTr("Clean up %1?").arg(label), detail, qsTr("Clean up"), "edit-clear-all", () => prune(kind, label));
         }
 
-        title: "Speicherplatz"
+        title: qsTr("Disk usage")
         padding: Kirigami.Units.largeSpacing
         preferredWidth: Kirigami.Units.gridUnit * 26
         standardButtons: Kirigami.Dialog.Close
@@ -751,10 +751,10 @@ Kirigami.ApplicationWindow {
                     id: usage
                     required property var modelData
                     readonly property string label: ({
-                            "Images": "Images",
-                            "Containers": "Container",
-                            "Local Volumes": "Volumes",
-                            "Build Cache": "Build-Cache"
+                            "Images": qsTr("Images"),
+                            "Containers": qsTr("Containers"),
+                            "Local Volumes": qsTr("Volumes"),
+                            "Build Cache": qsTr("Build cache")
                         })[modelData.type] ?? modelData.type
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
@@ -762,11 +762,11 @@ Kirigami.ApplicationWindow {
                     RowLayout {
                         QQC2.Label {
                             Layout.fillWidth: true
-                            text: `${usage.label}: ${usage.modelData.size}`
+                            text: qsTr("%1: %2").arg(usage.label).arg(usage.modelData.size)
                             font.bold: true
                         }
                         QQC2.Label {
-                            text: `freigebbar ${usage.modelData.reclaimable}`
+                            text: qsTr("reclaimable %1").arg(usage.modelData.reclaimable)
                             color: Kirigami.Theme.disabledTextColor
                         }
                     }
@@ -777,31 +777,31 @@ Kirigami.ApplicationWindow {
 
                         QQC2.Button {
                             visible: usage.modelData.type === "Containers"
-                            text: "Gestoppte Container löschen"
+                            text: qsTr("Remove stopped containers")
                             enabled: diskDialog.pruning === ""
-                            onClicked: diskDialog.ask("containers", "Gestoppte Container", "„docker container prune“ löscht alle gestoppten Container, auch die gestoppter Compose-Projekte. Deren nächster Start legt sie neu an. Volumes bleiben erhalten.")
+                            onClicked: diskDialog.ask("containers", qsTr("Stopped containers"), qsTr("“docker container prune” removes every stopped container, also those of stopped Compose projects; their next start creates them again. Volumes are kept."))
                         }
                         QQC2.Button {
                             visible: usage.modelData.type === "Images"
-                            text: "Verwaiste Images löschen"
+                            text: qsTr("Remove dangling images")
                             enabled: diskDialog.pruning === ""
-                            onClicked: diskDialog.ask("danglingImages", "Verwaiste Images", "„docker image prune“ löscht Images ohne Namen, die kein Container nutzt, meist Überbleibsel früherer Builds.")
+                            onClicked: diskDialog.ask("danglingImages", qsTr("Dangling images"), qsTr("“docker image prune” removes images without a name that no container uses, mostly leftovers of earlier builds."))
                         }
                         QQC2.Button {
                             visible: usage.modelData.type === "Images"
-                            text: "Alle ungenutzten Images löschen"
+                            text: qsTr("Remove all unused images")
                             enabled: diskDialog.pruning === ""
-                            onClicked: diskDialog.ask("unusedImages", "Ungenutzte Images", "„docker image prune --all“ löscht jedes Image, das kein Container nutzt, auch das gestoppter Container. Sie müssen beim nächsten Start neu geladen oder gebaut werden.")
+                            onClicked: diskDialog.ask("unusedImages", qsTr("Unused images"), qsTr("“docker image prune --all” removes every image no container uses. They have to be pulled or built again on the next start."))
                         }
                         QQC2.Button {
                             visible: usage.modelData.type === "Build Cache"
-                            text: "Build-Cache leeren"
+                            text: qsTr("Clear build cache")
                             enabled: diskDialog.pruning === ""
-                            onClicked: diskDialog.ask("buildCache", "Build-Cache", "„docker builder prune“ leert den Build-Cache. Der nächste Build dauert dadurch länger.")
+                            onClicked: diskDialog.ask("buildCache", qsTr("Build cache"), qsTr("“docker builder prune” clears the build cache. The next build takes longer."))
                         }
                         QQC2.Label {
                             visible: usage.modelData.type === "Local Volumes"
-                            text: "Volumes enthalten Daten, etwa Datenbanken. Hafen löscht sie nicht."
+                            text: qsTr("Volumes hold data such as databases. Hafen does not remove them.")
                             color: Kirigami.Theme.disabledTextColor
                             font: Kirigami.Theme.smallFont
                         }
@@ -841,7 +841,7 @@ Kirigami.ApplicationWindow {
             open();
         }
 
-        title: "Einstellungen"
+        title: qsTr("Settings")
         padding: Kirigami.Units.largeSpacing
         preferredWidth: Kirigami.Units.gridUnit * 24
         standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
@@ -860,17 +860,17 @@ Kirigami.ApplicationWindow {
                 // "" follows the context the Docker CLI uses.
                 property string chosen: ""
                 readonly property var names: [""].concat(root.contexts.map(c => c.name))
-                Kirigami.FormData.label: "Docker-Kontext:"
+                Kirigami.FormData.label: qsTr("Docker context:")
                 visible: root.contexts.length > 1 || settings.context !== ""
-                model: names.map(n => n === "" ? "Wie die Docker-CLI" : n)
+                model: names.map(n => n === "" ? qsTr("Same as the Docker CLI") : n)
                 currentIndex: Math.max(0, names.indexOf(chosen))
                 onActivated: index => chosen = names[index]
             }
 
             QQC2.ComboBox {
-                Kirigami.FormData.label: "Terminal:"
+                Kirigami.FormData.label: qsTr("Terminal:")
                 visible: preferences.terminals.length > 0
-                model: preferences.terminals.map(t => t.verified ? t.label : `${t.label} (Option geraten)`).concat(["Eigener Befehl"])
+                model: preferences.terminals.map(t => t.verified ? t.label : qsTr("%1 (option guessed)").arg(t.label)).concat([qsTr("Custom command")])
                 currentIndex: {
                     const i = preferences.terminals.findIndex(t => t.command === terminalField.text.trim());
                     return i < 0 ? preferences.terminals.length : i;
@@ -883,9 +883,9 @@ Kirigami.ApplicationWindow {
 
             QQC2.TextField {
                 id: terminalField
-                Kirigami.FormData.label: preferences.terminals.length ? "Befehl:" : "Terminal:"
+                Kirigami.FormData.label: preferences.terminals.length ? qsTr("Command:") : qsTr("Terminal:")
                 Layout.fillWidth: true
-                placeholderText: "z. B. konsole -e"
+                placeholderText: qsTr("e.g. konsole -e")
             }
 
             QQC2.Label {
@@ -894,7 +894,7 @@ Kirigami.ApplicationWindow {
                 wrapMode: Text.Wrap
                 font: Kirigami.Theme.smallFont
                 color: Kirigami.Theme.disabledTextColor
-                text: "Hafen hängt den Befehl für Logs oder Shell an, z. B. „docker exec …“. Das Terminal muss danach einen Befehl mit Argumenten erwarten."
+                text: qsTr("Hafen appends the command for logs or a shell, e.g. “docker exec …”. The terminal has to expect a program with arguments after it.")
             }
 
             Kirigami.InlineMessage {
@@ -902,40 +902,40 @@ Kirigami.ApplicationWindow {
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 16
                 visible: preferences.chosen !== null && !preferences.chosen.verified
                 type: Kirigami.MessageType.Warning
-                text: "Dieses Terminal gibt nicht an, mit welcher Option es Befehle startet. Hafen nimmt „-e“ an. Öffnen Logs oder Shell nicht, den Befehl anpassen."
+                text: qsTr("This terminal does not declare the option that runs a command. Hafen assumes “-e”. If logs or a shell do not open, adjust the command.")
             }
 
             QQC2.CheckBox {
                 id: statsBox
-                Kirigami.FormData.label: "Anzeige:"
-                text: "CPU und RAM anzeigen"
+                Kirigami.FormData.label: qsTr("Display:")
+                text: qsTr("Show CPU and memory")
             }
 
             QQC2.CheckBox {
                 id: problemsBox
-                Kirigami.FormData.label: "Meldungen:"
-                text: "Abstürze, Neustart-Schleifen und kranke Container melden"
+                Kirigami.FormData.label: qsTr("Notifications:")
+                text: qsTr("Report crashes, restart loops and unhealthy containers")
             }
 
             QQC2.CheckBox {
                 id: autostartBox
-                Kirigami.FormData.label: "Start:"
-                text: "Beim Anmelden im Tray starten"
+                Kirigami.FormData.label: qsTr("Startup:")
+                text: qsTr("Start in the tray at login")
             }
 
             QQC2.CheckBox {
                 id: updatesBox
-                Kirigami.FormData.label: "Updates:"
-                text: "Beim Start nach neuen Versionen suchen"
+                Kirigami.FormData.label: qsTr("Updates:")
+                text: qsTr("Check for new versions at startup")
             }
 
             RowLayout {
-                Kirigami.FormData.label: "Version:"
+                Kirigami.FormData.label: qsTr("Version:")
                 QQC2.Label {
                     text: Launcher.version
                 }
                 QQC2.Button {
-                    text: "Jetzt prüfen"
+                    text: qsTr("Check now")
                     icon.name: "view-refresh"
                     onClicked: {
                         root.manualUpdateCheck = true;
@@ -967,35 +967,35 @@ Kirigami.ApplicationWindow {
         readonly property string label: forContainer ? root.containerName(container) : root.projectName(group?.project ?? "")
 
         QQC2.MenuItem {
-            text: "Starten"
+            text: qsTr("Start")
             icon.name: "media-playback-start"
             visible: menu.canStart
             height: visible ? implicitHeight : 0
             onTriggered: menu.forContainer ? root.act("start", [menu.container], menu.label) : root.startProject(menu.group)
         }
         QQC2.MenuItem {
-            text: "Fortsetzen"
+            text: qsTr("Resume")
             icon.name: "media-playback-start"
             visible: menu.canUnpause
             height: visible ? implicitHeight : 0
             onTriggered: root.act("unpause", menu.forContainer ? [menu.container] : menu.members.filter(c => Model.actionsFor(c).unpause), menu.label)
         }
         QQC2.MenuItem {
-            text: "Neu starten"
+            text: qsTr("Restart")
             icon.name: "view-refresh"
             visible: menu.canRestart
             height: visible ? implicitHeight : 0
             onTriggered: menu.forContainer ? root.act("restart", [menu.container], menu.label) : root.restartProject(menu.group)
         }
         QQC2.MenuItem {
-            text: "Stoppen…"
+            text: qsTr("Stop…")
             icon.name: "media-playback-stop"
             visible: menu.canStop
             height: visible ? implicitHeight : 0
             onTriggered: menu.forContainer ? root.stopContainer(menu.container) : root.stopGroup(menu.group)
         }
         QQC2.MenuItem {
-            text: "Herunterfahren…"
+            text: qsTr("Shut down…")
             icon.name: "system-shutdown-symbolic"
             visible: menu.hasCompose && menu.members.length > 0
             height: visible ? implicitHeight : 0
@@ -1006,53 +1006,53 @@ Kirigami.ApplicationWindow {
             height: visible ? implicitHeight : 0
         }
         QQC2.MenuItem {
-            text: menu.forContainer ? "Logs anzeigen" : "Logs aller Container"
+            text: menu.forContainer ? qsTr("Show logs") : qsTr("Logs of all containers")
             icon.name: "view-list-text"
             visible: menu.forContainer || menu.hasCompose
             height: visible ? implicitHeight : 0
-            onTriggered: menu.forContainer ? root.inTerminal(Model.logsCommand(menu.container, Docker.contextArgs(), root.logsEnd), "Logs") : root.inTerminal(Model.projectLogsCommand(menu.group.project, root.remembered[menu.group.project], Docker.contextArgs(), root.logsEnd), "Logs")
+            onTriggered: menu.forContainer ? root.inTerminal(Model.logsCommand(menu.container, Docker.contextArgs(), root.logsEnd), qsTr("Logs")) : root.inTerminal(Model.projectLogsCommand(menu.group.project, root.remembered[menu.group.project], Docker.contextArgs(), root.logsEnd), qsTr("Logs"))
         }
         QQC2.MenuItem {
-            text: "Shell öffnen"
+            text: qsTr("Open shell")
             icon.name: "utilities-terminal"
             visible: menu.forContainer && menu.actions.shell
             height: visible ? implicitHeight : 0
-            onTriggered: root.inTerminal(Model.shellCommand(menu.container, Docker.contextArgs()), "Shell")
+            onTriggered: root.inTerminal(Model.shellCommand(menu.container, Docker.contextArgs()), qsTr("Shell"))
         }
         QQC2.MenuItem {
-            text: "Projektordner öffnen"
+            text: qsTr("Open project folder")
             icon.name: "document-open-folder"
             visible: menu.hasCompose && root.localDaemon
             height: visible ? implicitHeight : 0
-            onTriggered: root.launch(["xdg-open", root.remembered[menu.group.project].workingDir], "Projektordner")
+            onTriggered: root.launch(["xdg-open", root.remembered[menu.group.project].workingDir], qsTr("Project folder"))
         }
         QQC2.MenuSeparator {
             visible: menu.forContainer || menu.isProject || menu.removable.length > 0
             height: visible ? implicitHeight : 0
         }
         QQC2.MenuItem {
-            text: "Name und Farbe…"
+            text: qsTr("Name and color…")
             icon.name: "edit-rename"
             visible: menu.forContainer || menu.isProject
             height: visible ? implicitHeight : 0
             onTriggered: customize.openFor(menu.customKey, menu.forContainer ? Model.shortName(menu.container) : menu.group.project)
         }
         QQC2.MenuItem {
-            text: "Name und Farbe zurücksetzen"
+            text: qsTr("Reset name and color")
             icon.name: "edit-undo"
             visible: root.custom[menu.customKey] !== undefined
             height: visible ? implicitHeight : 0
             onTriggered: root.setCustom(menu.customKey, undefined)
         }
         QQC2.MenuItem {
-            text: menu.forContainer ? "Löschen…" : "Gestoppte Container löschen…"
+            text: menu.forContainer ? qsTr("Remove…") : qsTr("Remove stopped containers…")
             icon.name: "edit-delete"
             visible: menu.forContainer ? menu.actions.remove : menu.removable.length > 0
             height: visible ? implicitHeight : 0
             onTriggered: root.confirmRemove(menu.forContainer ? [menu.container] : menu.removable, menu.label)
         }
         QQC2.MenuItem {
-            text: "Vergessen"
+            text: qsTr("Forget")
             icon.name: "list-remove"
             // Docker still lists the project while any container exists; it would come straight back.
             visible: menu.isProject && menu.members.length === 0
@@ -1069,9 +1069,9 @@ Kirigami.ApplicationWindow {
             model: menu.ports
             delegate: QQC2.MenuItem {
                 required property var modelData
-                text: `${modelData.url.replace("http://", "")} öffnen`
+                text: qsTr("Open %1").arg(modelData.url.replace("http://", ""))
                 icon.name: "globe"
-                onTriggered: root.launch(["xdg-open", modelData.url], "Browser")
+                onTriggered: root.launch(["xdg-open", modelData.url], qsTr("Browser"))
             }
             onObjectAdded: (index, object) => menu.addItem(object)
             onObjectRemoved: (index, object) => menu.removeItem(object)
@@ -1079,30 +1079,30 @@ Kirigami.ApplicationWindow {
     }
 
     pageStack.initialPage: Kirigami.ScrollablePage {
-        readonly property string daemon: settings.context ? `Docker (${settings.context})` : "Docker"
-        title: root.loaded && !root.errorTitle ? `${daemon} · ${root.activeCount} von ${root.containers.length} aktiv` : daemon
+        // The counts live in the section headers and the tray tooltip; the title names the daemon only.
+        title: settings.context ? qsTr("Docker (%1)").arg(settings.context) : "Docker"
 
         actions: [
             Kirigami.Action {
                 icon.name: "view-refresh"
-                text: "Aktualisieren"
+                text: qsTr("Refresh")
                 displayHint: Kirigami.DisplayHint.IconOnly
-                tooltip: "Container jetzt neu einlesen"
+                tooltip: qsTr("Read the containers again now")
                 enabled: !root.manualLoading
                 onTriggered: root.refresh(true)
             },
             Kirigami.Action {
                 icon.name: "drive-harddisk-symbolic"
-                text: "Speicherplatz"
+                text: qsTr("Disk usage")
                 displayHint: Kirigami.DisplayHint.IconOnly
-                tooltip: "Speicherplatz von Docker anzeigen und aufräumen"
+                tooltip: qsTr("Show and clean up Docker's disk usage")
                 onTriggered: diskDialog.open()
             },
             Kirigami.Action {
                 icon.name: "configure"
-                text: "Einstellungen"
+                text: qsTr("Settings")
                 displayHint: Kirigami.DisplayHint.IconOnly
-                tooltip: "Einstellungen"
+                tooltip: qsTr("Settings")
                 onTriggered: preferences.openSettings()
             }
         ]
@@ -1114,7 +1114,7 @@ Kirigami.ApplicationWindow {
                 id: search
                 Layout.fillWidth: true
                 Layout.margins: Kirigami.Units.smallSpacing
-                placeholderText: "Projekte und Container filtern…"
+                placeholderText: qsTr("Filter projects and containers…")
                 onTextChanged: root.query = text.trim()
                 Keys.onEscapePressed: text = ""
             }
@@ -1124,7 +1124,7 @@ Kirigami.ApplicationWindow {
                 visible: root.errorTitle !== ""
                 type: Kirigami.MessageType.Error
                 position: Kirigami.InlineMessage.Position.Header
-                text: `${root.errorTitle}${root.loaded ? ", letzter Stand ist nicht aktuell" : ""}.\n${root.errorDetail}`
+                text: (root.loaded ? qsTr("%1. The list shows the last known state.") : qsTr("%1.")).arg(root.errorTitle) + "\n" + root.errorDetail
             }
 
             Kirigami.InlineMessage {
@@ -1133,12 +1133,12 @@ Kirigami.ApplicationWindow {
                 type: Kirigami.MessageType.Information
                 position: Kirigami.InlineMessage.Position.Header
                 showCloseButton: true
-                text: `Hafen ${root.availableUpdate?.tag ?? ""} ist verfügbar.`
+                text: qsTr("Hafen %1 is available.").arg(root.availableUpdate?.tag ?? "")
                 actions: [
                     Kirigami.Action {
-                        text: "Herunterladen"
+                        text: qsTr("Download")
                         icon.name: "globe"
-                        onTriggered: root.launch(["xdg-open", root.availableUpdate.url], "Download-Seite")
+                        onTriggered: root.launch(["xdg-open", root.availableUpdate.url], qsTr("Download page"))
                     }
                 ]
             }
@@ -1149,7 +1149,7 @@ Kirigami.ApplicationWindow {
             padding: Kirigami.Units.smallSpacing * 2
             color: root.statsError ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
             font: Kirigami.Theme.smallFont
-            text: root.statsError ? `CPU/RAM: ${root.statsError}` : root.statsSum ? `Docker gesamt: CPU ${Model.formatPercent(root.statsSum.cpu)} · RAM ${Model.formatBytes(root.statsSum.mem)} (${Model.formatPercent(root.statsSum.memShare)})` : ""
+            text: root.statsError ? qsTr("CPU/memory: %1").arg(root.statsError) : root.statsSum ? qsTr("Docker in total: CPU %1 · memory %2 (%3)").arg(Model.formatPercent(root.statsSum.cpu)).arg(Model.formatBytes(root.statsSum.mem)).arg(Model.formatPercent(root.statsSum.memShare)) : ""
         }
 
         ColumnLayout {
@@ -1161,7 +1161,7 @@ Kirigami.ApplicationWindow {
                 Layout.topMargin: Kirigami.Units.gridUnit * 2
                 visible: !root.errorTitle && (!root.loaded || root.groups.length === 0)
                 icon.name: !root.loaded ? "" : root.query ? "edit-find" : "dialog-ok"
-                text: !root.loaded ? "Container werden geladen…" : root.query ? "Keine Treffer" : "Keine Container"
+                text: !root.loaded ? qsTr("Loading containers…") : root.query ? qsTr("No matches") : qsTr("No containers")
             }
 
             Repeater {
@@ -1199,7 +1199,7 @@ Kirigami.ApplicationWindow {
 
                             QQC2.Label {
                                 Layout.fillWidth: true
-                                text: section.key === "active" ? "Aktiv" : "Inaktiv"
+                                text: section.key === "active" ? qsTr("Active") : qsTr("Inactive")
                                 font.bold: true
                                 color: Kirigami.Theme.disabledTextColor
                             }
@@ -1333,7 +1333,7 @@ Kirigami.ApplicationWindow {
                                             visible: headerHover.hovered && group.actionable
                                             icon.name: group.idle ? "media-playback-start" : "media-playback-stop"
                                             display: QQC2.AbstractButton.IconOnly
-                                            text: group.idle ? `${group.label} starten` : `Alle Container von ${group.label} stoppen`
+                                            text: group.idle ? qsTr("Start %1").arg(group.label) : qsTr("Stop all containers of %1").arg(group.label)
                                             QQC2.ToolTip.visible: hovered
                                             QQC2.ToolTip.text: text
                                             onClicked: group.idle ? root.startProject(root.wholeGroup(group.modelData)) : root.stopGroup(root.wholeGroup(group.modelData))
@@ -1361,7 +1361,7 @@ Kirigami.ApplicationWindow {
                                     leftPadding: Kirigami.Units.gridUnit * 2
                                     QQC2.ToolTip.visible: rowHover.hovered && !rowButton.hovered
                                     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-                                    QQC2.ToolTip.text: failure ? `${Model.containerTooltip(modelData)}\nLetzte Aktion fehlgeschlagen: ${failure}` : Model.containerTooltip(modelData)
+                                    QQC2.ToolTip.text: failure ? Model.containerTooltip(modelData) + "\n" + qsTr("Last action failed: %1").arg(failure) : Model.containerTooltip(modelData)
 
                                     HoverHandler {
                                         id: rowHover
@@ -1403,7 +1403,7 @@ Kirigami.ApplicationWindow {
                                         }
 
                                         QQC2.Label {
-                                            text: row.modelData.state === "paused" ? "pausiert" : Model.uptime(row.modelData.status)
+                                            text: row.modelData.state === "paused" ? qsTr("paused") : Model.uptime(row.modelData.status)
                                             color: Kirigami.Theme.disabledTextColor
                                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                                         }
@@ -1428,7 +1428,7 @@ Kirigami.ApplicationWindow {
                                                 visible: !row.busy && rowHover.hovered && row.quickAction !== ""
                                                 icon.name: row.quickAction === "stop" ? "media-playback-stop" : "media-playback-start"
                                                 display: QQC2.AbstractButton.IconOnly
-                                                text: row.quickAction === "stop" ? "Container stoppen" : row.quickAction === "unpause" ? "Container fortsetzen" : "Container starten"
+                                                text: row.quickAction === "stop" ? qsTr("Stop container") : row.quickAction === "unpause" ? qsTr("Resume container") : qsTr("Start container")
                                                 QQC2.ToolTip.visible: hovered
                                                 QQC2.ToolTip.text: text
                                                 onClicked: {

@@ -6,7 +6,9 @@
 #include <QCommandLineParser>
 #include <QIcon>
 #include <QQmlApplicationEngine>
+#include <QLocale>
 #include <QQuickStyle>
+#include <QTranslator>
 #include <QWindow>
 
 int main(int argc, char *argv[])
@@ -24,11 +26,17 @@ int main(int argc, char *argv[])
     // Closing the window only hides it; the tray icon keeps the app running.
     QApplication::setQuitOnLastWindowClosed(false);
 
+    // Translations are compiled into the binary under :/i18n (qt_add_translations); a language without one stays English.
+    QTranslator translator;
+    if (translator.load(QLocale(), QStringLiteral("hafen"), QStringLiteral("_"), QStringLiteral(":/i18n"))) {
+        QCoreApplication::installTranslator(&translator);
+    }
+
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Docker-Container nach Compose-Projekt im Tray."));
+    parser.setApplicationDescription(QCoreApplication::translate("main", "Docker containers by Compose project, in the tray."));
     parser.addHelpOption();
     parser.addVersionOption();
-    const QCommandLineOption hidden(QStringLiteral("hidden"), QStringLiteral("Nur das Tray-Icon zeigen, das Fenster bleibt versteckt."));
+    const QCommandLineOption hidden(QStringLiteral("hidden"), QCoreApplication::translate("main", "Show only the tray icon; the window stays hidden."));
     parser.addOption(hidden);
     parser.process(app);
 
