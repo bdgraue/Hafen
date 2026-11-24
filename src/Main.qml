@@ -139,8 +139,32 @@ Kirigami.ApplicationWindow {
         property alias windowHeight: root.height
     }
 
+    // The tray menu lists every Compose project; stopping asks first, so it brings the window up for the dialog.
+    onAllGroupsChanged: tray.setProjects(allGroups.filter(g => g.project).map(g => ({
+                project: g.project,
+                label: projectName(g.project),
+                active: g.active.length > 0,
+                canStart: g.members.length === 0 || g.members.some(c => Model.actionsFor(c).start),
+                canStop: g.members.some(c => Model.actionsFor(c).stop)
+            })))
+
     Tray {
         id: tray
+        onProjectAction: (project, action) => {
+            const group = root.allGroups.find(g => g.project === project);
+            if (!group)
+                return;
+            if (action === "start")
+                root.startProject(group);
+            else if (action === "restart")
+                root.restartProject(group);
+            else {
+                root.show();
+                root.raise();
+                root.requestActivate();
+                root.stopGroup(group);
+            }
+        }
         window: root
         warning: root.errorTitle !== "" || root.containers.some(c => Model.condition(c) === "unhealthy")
         subtitle: root.errorTitle ? `${root.errorTitle}\n${root.errorDetail}` : root.loaded ? `${root.activeCount} aktive Container` : "Container werden geladen…"
