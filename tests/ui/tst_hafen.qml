@@ -69,14 +69,26 @@ TestCase {
         tryVerify(() => findChild(win.contentItem, name) === null, 3000, `${name} is still there`);
     }
 
-    // Lets the layout finish, so that clicks land where the item is now.
+    // Lets the layouts finish, so that clicks land where the item is now and measurements see the final geometry.
+    // Waiting for a frame was not enough: on a loaded machine the frame came before the list had placed new groups,
+    // and a click hit the old spot. waitForPolish alone is not enough either: once the list outgrows the view, the
+    // scroll bar appears through a posted event and narrows the list in a further polish.
     function settle() {
-        waitForRendering(win.contentItem, 300);
+        for (let round = 0; round < 10; round++) {
+            verify(waitForPolish(win, 5000), "the layout did not settle");
+            wait(0);
+            if (!isPolishScheduled(win))
+                return;
+        }
+        fail("the layout kept changing");
     }
 
     function openGroup(key) {
-        if (!win.openGroups.includes(key))
-            mouseClick(item(`group:${key}`));
+        if (!win.openGroups.includes(key)) {
+            const header = item(`group:${key}`);
+            settle();
+            mouseClick(header);
+        }
         tryVerify(() => win.openGroups.includes(key));
         settle();
     }
@@ -216,6 +228,7 @@ TestCase {
         hover(target);
         tryVerify(() => button.visible, 2000, "no button on hover");
         compare(button.text, "Stop container");
+        settle();
         compare(geometry(), before);
 
         const header = item("group:shop");
@@ -225,6 +238,7 @@ TestCase {
         hover(header);
         tryVerify(() => groupButton.visible, 2000, "no button on the group");
         verify(!button.visible);
+        settle();
         compare(headerGeometry(), headerBefore);
     }
 
