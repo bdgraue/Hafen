@@ -437,3 +437,30 @@ export function problemsBetween(previous, next) {
   }
   return problems;
 }
+
+export const DISK_USAGE_ARGS = ["system", "df", "--format", "{{json .}}"];
+
+// One row per kind of Docker data: [{ type, total, active, size, reclaimable }], sizes as Docker prints them.
+export function parseDiskUsage(stdout) {
+  return stdout.split(/\r?\n/).filter(line => line.trim()).map(line => {
+    const row = JSON.parse(line);
+    for (const key of ["Type", "TotalCount", "Active", "Size", "Reclaimable"]) {
+      if (typeof row[key] !== "string") throw new Error("Ungültige Antwort von docker system df");
+    }
+    return { type: row.Type, total: row.TotalCount, active: row.Active, size: row.Size, reclaimable: row.Reclaimable };
+  });
+}
+
+// Volumes are left out on purpose: they hold the data of databases and uploads.
+export const PRUNE = {
+  containers: ["container", "prune", "--force"],
+  danglingImages: ["image", "prune", "--force"],
+  unusedImages: ["image", "prune", "--all", "--force"],
+  buildCache: ["builder", "prune", "--force"],
+};
+
+// `docker … prune` ends with "Total reclaimed space: 1.2GB", `docker builder prune` with "Total:\t1.2GB".
+export function reclaimed(stdout) {
+  const m = stdout.match(/^Total(?: reclaimed space)?:\s*(.+?)\s*$/m);
+  return m ? m[1] : null;
+}

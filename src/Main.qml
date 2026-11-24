@@ -632,6 +632,146 @@ Kirigami.ApplicationWindow {
     }
 
     Kirigami.Dialog {
+        id: diskDialog
+
+        property var rows: []
+        property string error: ""
+        property bool loading: false
+        property string pruning: ""
+
+        function load() {
+            loading = true;
+            Docker.run(Model.DISK_USAGE_ARGS, (code, stdout, stderr) => {
+                loading = false;
+                try {
+                    if (code !== 0)
+                        throw new Error(Model.describeError(code, stderr).title);
+                    rows = Model.parseDiskUsage(stdout);
+                    error = "";
+                } catch (e) {
+                    error = String(e.message ?? e);
+                }
+            }, Model.READ_TIMEOUT_MS);
+        }
+
+        function prune(kind, label) {
+            pruning = kind;
+            Docker.run(Model.PRUNE[kind], (code, stdout, stderr) => {
+                pruning = "";
+                if (code === 0)
+                    tray.notify(`${label}: aufgeräumt`, `Freigegeben: ${Model.reclaimed(stdout) ?? "unbekannt"}`, "dialog-information");
+                else
+                    tray.notify(`${label}: Aufräumen fehlgeschlagen`, stderr.trim() || `Exit ${code}`, "dialog-error");
+                load();
+                root.refresh(true);
+            }, Model.NO_TIMEOUT);
+        }
+
+        function ask(kind, label, detail) {
+            root.confirm(`${label} aufräumen?`, detail, "Aufräumen", "edit-clear-all", () => prune(kind, label));
+        }
+
+        title: "Speicherplatz"
+        padding: Kirigami.Units.largeSpacing
+        preferredWidth: Kirigami.Units.gridUnit * 26
+        standardButtons: Kirigami.Dialog.Close
+        onOpened: load()
+
+        ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: diskDialog.error !== ""
+                type: Kirigami.MessageType.Error
+                text: diskDialog.error
+            }
+
+            QQC2.BusyIndicator {
+                Layout.alignment: Qt.AlignHCenter
+                visible: diskDialog.loading && diskDialog.rows.length === 0
+                running: visible
+            }
+
+            Repeater {
+                model: diskDialog.rows
+
+                delegate: ColumnLayout {
+                    id: usage
+                    required property var modelData
+                    readonly property string label: ({
+                            "Images": "Images",
+                            "Containers": "Container",
+                            "Local Volumes": "Volumes",
+                            "Build Cache": "Build-Cache"
+                        })[modelData.type] ?? modelData.type
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    RowLayout {
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: `${usage.label}: ${usage.modelData.size}`
+                            font.bold: true
+                        }
+                        QQC2.Label {
+                            text: `freigebbar ${usage.modelData.reclaimable}`
+                            color: Kirigami.Theme.disabledTextColor
+                        }
+                    }
+
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        QQC2.Button {
+                            visible: usage.modelData.type === "Containers"
+                            text: "Gestoppte Container löschen"
+                            enabled: diskDialog.pruning === ""
+                            onClicked: diskDialog.ask("containers", "Gestoppte Container", "„docker container prune“ löscht alle gestoppten Container, auch die gestoppter Compose-Projekte. Deren nächster Start legt sie neu an. Volumes bleiben erhalten.")
+                        }
+                        QQC2.Button {
+                            visible: usage.modelData.type === "Images"
+                            text: "Verwaiste Images löschen"
+                            enabled: diskDialog.pruning === ""
+                            onClicked: diskDialog.ask("danglingImages", "Verwaiste Images", "„docker image prune“ löscht Images ohne Namen, die kein Container nutzt, meist Überbleibsel früherer Builds.")
+                        }
+                        QQC2.Button {
+                            visible: usage.modelData.type === "Images"
+                            text: "Alle ungenutzten Images löschen"
+                            enabled: diskDialog.pruning === ""
+                            onClicked: diskDialog.ask("unusedImages", "Ungenutzte Images", "„docker image prune --all“ löscht jedes Image, das kein Container nutzt, auch das gestoppter Container. Sie müssen beim nächsten Start neu geladen oder gebaut werden.")
+                        }
+                        QQC2.Button {
+                            visible: usage.modelData.type === "Build Cache"
+                            text: "Build-Cache leeren"
+                            enabled: diskDialog.pruning === ""
+                            onClicked: diskDialog.ask("buildCache", "Build-Cache", "„docker builder prune“ leert den Build-Cache. Der nächste Build dauert dadurch länger.")
+                        }
+                        QQC2.Label {
+                            visible: usage.modelData.type === "Local Volumes"
+                            text: "Volumes enthalten Daten, etwa Datenbanken. Hafen löscht sie nicht."
+                            color: Kirigami.Theme.disabledTextColor
+                            font: Kirigami.Theme.smallFont
+                        }
+                        QQC2.BusyIndicator {
+                            visible: diskDialog.pruning !== "" && ({
+                                    "containers": "Containers",
+                                    "danglingImages": "Images",
+                                    "unusedImages": "Images",
+                                    "buildCache": "Build Cache"
+                                })[diskDialog.pruning] === usage.modelData.type
+                            running: visible
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            implicitWidth: implicitHeight
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Kirigami.Dialog {
         id: preferences
 
         // Read again on every opening, so a terminal installed meanwhile shows up.
@@ -883,6 +1023,13 @@ Kirigami.ApplicationWindow {
                 tooltip: "Container jetzt neu einlesen"
                 enabled: !root.manualLoading
                 onTriggered: root.refresh(true)
+            },
+            Kirigami.Action {
+                icon.name: "drive-harddisk-symbolic"
+                text: "Speicherplatz"
+                displayHint: Kirigami.DisplayHint.IconOnly
+                tooltip: "Speicherplatz von Docker anzeigen und aufräumen"
+                onTriggered: diskDialog.open()
             },
             Kirigami.Action {
                 icon.name: "configure"

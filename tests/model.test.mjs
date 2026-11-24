@@ -225,3 +225,15 @@ test("problems are reported once, when a container gets into them", async () => 
   assert.deepEqual(kinds([up("a", "Up 1 hour (unhealthy)")], [up("a", "Up 2 hours (unhealthy)")]), []);
   assert.deepEqual(kinds([], [exited("new", 1)]), []);
 });
+
+test("disk usage and the space a prune freed are read from Docker's output", async () => {
+  const { parseDiskUsage, reclaimed, PRUNE } = await import("../src/model.mjs");
+  const rows = parseDiskUsage('{"Active":"14","Reclaimable":"33.55GB (68%)","Size":"49.28GB","TotalCount":"124","Type":"Images"}\n{"Active":"0","Reclaimable":"48.65GB","Size":"65.14GB","TotalCount":"1056","Type":"Build Cache"}\n');
+  assert.deepEqual(rows[0], { type: "Images", total: "124", active: "14", size: "49.28GB", reclaimable: "33.55GB (68%)" });
+  assert.equal(rows[1].type, "Build Cache");
+  assert.throws(() => parseDiskUsage('{"Type":"Images"}'), /system df/);
+  assert.equal(reclaimed("Deleted Containers:\nabc\n\nTotal reclaimed space: 1.597GB\n"), "1.597GB");
+  assert.equal(reclaimed("ID\tRECLAIMABLE\nx\ttrue\nTotal:\t48.65GB\n"), "48.65GB");
+  assert.equal(reclaimed("nothing"), null);
+  assert.equal(Object.values(PRUNE).some(args => args.includes("volume")), false);
+});
