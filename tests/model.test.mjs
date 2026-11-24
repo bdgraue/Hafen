@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Hafen contributors
 
+import "./setup.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   parseContainers, groupContainers, groupHealth, statusColor, containerTooltip, shortName, uptime, actionSummary,
-  composeSources, composeUpArgs, splitSections, actionsFor, actionArgs, condition, publishedPorts, splitCommand,
-  logsCommand, shellCommand, describeError, NOT_STARTED, parseSize, parseStats, statsTotal, formatBytes, formatPercent, isNewer,
+  composeSources, composeUpArgs, composeArgs, COMPOSE_COMMANDS, splitSections, actionsFor, actionArgs, condition, publishedPorts, splitCommand,
+  logsCommand, projectLogsCommand, shellCommand, describeError, NOT_STARTED, parseSize, parseStats, statsTotal, formatBytes, formatPercent, isNewer,
 } from "../src/model.mjs";
 
 const container = (id, project = "", status = "Up 2 hours", state = "running") => ({
@@ -50,6 +51,9 @@ test("compose sources come from the labels and build a compose up command", () =
     "compose", "--project-name", "shop", "--project-directory", "/srv/shop",
     "--file", "/srv/shop/compose.yaml", "--file", "/srv/shop/compose.override.yaml", "up", "--detach",
   ]);
+  assert.deepEqual(composeArgs("shop", sources.shop, COMPOSE_COMMANDS.down).slice(-1), ["down"]);
+  assert.deepEqual(composeArgs("shop", sources.shop, COMPOSE_COMMANDS.stop).slice(-1), ["stop"]);
+  assert.throws(() => actionArgs("down", "abc"), /Compose/);
   assert.throws(() => composeUpArgs("blog", undefined), /blog/);
   assert.throws(() => composeUpArgs("blog", { workingDir: "/srv/blog", configFiles: [] }), /blog/);
 });
@@ -75,8 +79,8 @@ test("action summary stays quiet on success and names partial and total failures
   const ok = { name: "shop-a", error: null };
   const bad = { name: "shop-b", error: "Error response from daemon: boom\nmore" };
   assert.equal(actionSummary("stop", "shop", [ok]), null);
-  assert.deepEqual(actionSummary("stop", "shop", [ok, bad]), { title: "shop: 1 von 2 Containern gestoppt", body: "shop-b: Error response from daemon: boom", level: "warning" });
-  assert.equal(actionSummary("start", "shop", [bad]).title, "shop: Starten fehlgeschlagen");
+  assert.deepEqual(actionSummary("stop", "shop", [ok, bad]), { title: "shop: 1 of 2 containers stopped", body: "shop-b: Error response from daemon: boom", level: "warning" });
+  assert.equal(actionSummary("start", "shop", [bad]).title, "shop: Starting failed");
   assert.equal(actionSummary("restart", "shop", [bad]).level, "error");
   assert.throws(() => actionSummary("pause", "shop", [bad]), /pause/);
 });
@@ -117,34 +121,36 @@ test("terminal commands split into argv and fail without a terminal", () => {
   assert.deepEqual(splitCommand("flatpak run org.kde.kwi -e"), ["flatpak", "run", "org.kde.kwi", "-e"]);
   assert.deepEqual(splitCommand(` "/opt/my term/bin" --title 'Hafen Logs' -e `), ["/opt/my term/bin", "--title", "Hafen Logs", "-e"]);
   assert.deepEqual(splitCommand(`term ""`), ["term", ""]);
-  assert.throws(() => splitCommand("   "), /Kein Terminal/);
-  assert.throws(() => splitCommand(`term "open`), /schließendes/);
+  assert.throws(() => splitCommand("   "), /No terminal/);
+  assert.throws(() => splitCommand(`term "open`), /closing/);
   const c = container("abc", "shop");
-  assert.deepEqual(logsCommand(c).slice(-2), ["sh", "abc"]);
-  assert.match(logsCommand(c)[2], /docker logs --follow --tail 200 -- "\$1"/);
-  assert.deepEqual(shellCommand(c).slice(0, 5), ["docker", "exec", "--interactive", "--tty", "abc"]);
+  assert.deepEqual(logsCommand(c, [], "Ende"), ["sh", "-c", '"$@"; printf "\\n— %s —" "$0"; read -r _', "Ende", "docker", "logs", "--follow", "--tail", "200", "abc"]);
+  assert.deepEqual(logsCommand(c, ["--context", "remote"], "Ende").slice(4, 8), ["docker", "--context", "remote", "logs"]);
+  assert.deepEqual(shellCommand(c, []).slice(0, 5), ["docker", "exec", "--interactive", "--tty", "abc"]);
+  const source = { workingDir: "/srv/shop", configFiles: ["/srv/shop/compose.yaml"] };
+  assert.deepEqual(projectLogsCommand("shop", source, [], "Ende").slice(4), ["docker", "compose", "--project-name", "shop", "--project-directory", "/srv/shop", "--file", "/srv/shop/compose.yaml", "logs", "--follow", "--tail", "200"]);
 });
 
 test("Docker errors name their cause", () => {
-  assert.equal(describeError(NOT_STARTED, "execvp: No such file").title, "Docker ist nicht installiert");
-  assert.equal(describeError(1, "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock").title, "Keine Rechte am Docker-Socket");
-  assert.equal(describeError(1, "failed to connect to the docker API at unix:///x.sock; check if the path is correct and if the daemon is running").title, "Docker-Dienst läuft nicht");
-  assert.equal(describeError(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?").title, "Docker-Dienst läuft nicht");
-  assert.deepEqual(describeError(1, ""), { title: "Docker nicht erreichbar", detail: "Exit 1" });
+  assert.equal(describeError(NOT_STARTED, "execvp: No such file").title, "Docker is not installed");
+  assert.equal(describeError(1, "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock").title, "No permission on the Docker socket");
+  assert.equal(describeError(1, "failed to connect to the docker API at unix:///x.sock; check if the path is correct and if the daemon is running").title, "The Docker daemon is not running");
+  assert.equal(describeError(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?").title, "The Docker daemon is not running");
+  assert.deepEqual(describeError(1, ""), { title: "Docker is not reachable", detail: "Exit code 1" });
 });
 
 test("docker stats are parsed and totalled against the whole machine", () => {
   assert.equal(parseSize("513.8MiB"), 513.8 * 1024 ** 2);
   assert.equal(parseSize("1.5GB"), 1.5e9);
   assert.equal(parseSize("0B"), 0);
-  assert.throws(() => parseSize("lots"), /Größe/);
+  assert.throws(() => parseSize("lots"), /unknown size/);
   const stats = parseStats('{"id":"a","cpu":"13.17%","mem":"513.8MiB / 60.43GiB"}\n{"id":"b","cpu":"0.00%","mem":"6.801MiB / 60.43GiB"}\n');
   assert.deepEqual(Object.keys(stats), ["a", "b"]);
   assert.equal(stats.a.cpu, 13.17);
   assert.throws(() => parseStats('{"id":"a","cpu":"--","mem":"1MiB / 2GiB"}'), /CPU/);
   const total = statsTotal({ a: { cpu: 150, mem: 1024 ** 3 }, b: { cpu: 50, mem: 1024 ** 3 } }, 8, 16 * 1024 ** 3);
   assert.deepEqual(total, { cpu: 25, mem: 2 * 1024 ** 3, memShare: 12.5 });
-  assert.throws(() => statsTotal({}, 0, 1), /unbekannt/);
+  assert.throws(() => statsTotal({}, 0, 1), /unknown/);
   assert.equal(formatBytes(513.8 * 1024 ** 2), "514 MiB");
   assert.equal(formatBytes(1.5 * 1024 ** 3), "1.5 GiB");
   assert.equal(formatPercent(3.14159), "3.1 %");
@@ -156,7 +162,7 @@ test("release tags are compared as versions", () => {
   assert.equal(isNewer("v0.2.0", "0.2.0"), false);
   assert.equal(isNewer("0.10.0", "0.9.9"), true);
   assert.equal(isNewer("v0.1.9", "0.2.0"), false);
-  assert.throws(() => isNewer("latest", "0.2.0"), /Versionsnummer/);
+  assert.throws(() => isNewer("latest", "0.2.0"), /version number/);
 });
 
 test("terminals come from desktop entries, with their command option when it is known", async () => {
@@ -179,9 +185,63 @@ test("terminals come from desktop entries, with their command option when it is 
     ["Kwi", "/usr/bin/flatpak run --branch=master --arch=x86_64 --command=kwi org.kde.kwi -e", true],
     ["Foo", "foo --single --", true],
     ["Bare", "bare", true],
-    ["Standard-Terminal (x-terminal-emulator)", "x-terminal-emulator -e", true],
+    ["Default terminal (x-terminal-emulator)", "x-terminal-emulator -e", true],
     ["Guess", "guess -e", false],
   ]);
   assert.equal(stripFieldCodes("app %F --x 100%% %i"), "app --x 100%");
   assert.equal(parseDesktopEntry("[Other]\nName=x\n[Desktop Entry]\nName = y").Name, "y");
+});
+
+test("the search keeps matching projects whole and filters containers by every word", async () => {
+  const { filterGroups } = await import("../src/model.mjs");
+  const groups = groupContainers([container("web-1", "shop"), container("db-1", "shop"), container("web-1", "blog"), container("tool")], { wiki: { workingDir: "/w", configFiles: ["/w/c.yaml"] } });
+  const label = p => (p === "blog" ? "Mein Blog" : p);
+  const name = c => (c.name === "container-tool" ? "Werkzeug" : c.name);
+  const run = q => filterGroups(groups, q, label, name).map(g => [g.project, g.members.map(c => c.id)]);
+  assert.deepEqual(run(""), groups.map(g => [g.project, g.members.map(c => c.id)]));
+  assert.deepEqual(run("SHOP"), [["shop", ["web-1", "db-1"]]]);
+  assert.deepEqual(run("web"), [["blog", ["web-1"]], ["shop", ["web-1"]]]);
+  assert.deepEqual(run("shop web"), [["shop", ["web-1"]]]);
+  assert.deepEqual(run("mein"), [["blog", ["web-1"]]]);
+  assert.deepEqual(run("werkzeug"), [["", ["tool"]]]);
+  assert.deepEqual(run("wiki"), [["wiki", []]]);
+  assert.deepEqual(run("nichts"), []);
+  const filtered = filterGroups(groups, "web", label, name).find(g => g.project === "shop");
+  assert.deepEqual(filtered.active.map(c => c.id), ["web-1"]);
+});
+
+test("problems are reported once, when a container gets into them", async () => {
+  const { problemsBetween, exitCode } = await import("../src/model.mjs");
+  const up = (id, status = "Up 1 hour") => container(id, "shop", status, "running");
+  const exited = (id, code) => container(id, "shop", `Exited (${code}) 1 second ago`, "exited");
+  assert.equal(exitCode("Exited (139) 2 hours ago"), 139);
+  assert.equal(exitCode("Up 1 hour"), null);
+  const kinds = (a, b) => problemsBetween(a, b).map(p => [p.container.id, p.kind, p.code]);
+  assert.deepEqual(kinds([up("a"), up("b"), up("c")], [exited("a", 1), exited("b", 0), exited("c", 143)]), [["a", "crashed", 1]]);
+  assert.deepEqual(kinds([up("a")], [exited("a", 137)]), []);
+  assert.deepEqual(kinds([exited("a", 1)], [exited("a", 1)]), []);
+  assert.deepEqual(kinds([up("a")], [container("a", "shop", "Restarting (1) 1 second ago", "restarting")]), [["a", "restarting", null]]);
+  assert.deepEqual(kinds([up("a")], [container("a", "shop", "Dead", "dead")]), [["a", "dead", null]]);
+  assert.deepEqual(kinds([up("a", "Up 1 hour (healthy)")], [up("a", "Up 1 hour (unhealthy)")]), [["a", "unhealthy", null]]);
+  assert.deepEqual(kinds([up("a", "Up 1 hour (unhealthy)")], [up("a", "Up 2 hours (unhealthy)")]), []);
+  assert.deepEqual(kinds([], [exited("new", 1)]), []);
+});
+
+test("disk usage and the space a prune freed are read from Docker's output", async () => {
+  const { parseDiskUsage, reclaimed, PRUNE } = await import("../src/model.mjs");
+  const rows = parseDiskUsage('{"Active":"14","Reclaimable":"33.55GB (68%)","Size":"49.28GB","TotalCount":"124","Type":"Images"}\n{"Active":"0","Reclaimable":"48.65GB","Size":"65.14GB","TotalCount":"1056","Type":"Build Cache"}\n');
+  assert.deepEqual(rows[0], { type: "Images", total: "124", active: "14", size: "49.28GB", reclaimable: "33.55GB (68%)" });
+  assert.equal(rows[1].type, "Build Cache");
+  assert.throws(() => parseDiskUsage('{"Type":"Images"}'), /system df/);
+  assert.equal(reclaimed("Deleted Containers:\nabc\n\nTotal reclaimed space: 1.597GB\n"), "1.597GB");
+  assert.equal(reclaimed("ID\tRECLAIMABLE\nx\ttrue\nTotal:\t48.65GB\n"), "48.65GB");
+  assert.equal(reclaimed("nothing"), null);
+  assert.equal(Object.values(PRUNE).some(args => args.includes("volume")), false);
+});
+
+test("docker contexts are listed with their endpoint", async () => {
+  const { parseContexts } = await import("../src/model.mjs");
+  assert.deepEqual(parseContexts('{"Current":true,"Description":"x","DockerEndpoint":"unix:///var/run/docker.sock","Error":"","Name":"default"}\n{"Current":false,"DockerEndpoint":"ssh://box","Error":"","Name":"box"}\n'),
+    [{ name: "default", current: true, endpoint: "unix:///var/run/docker.sock", error: "" }, { name: "box", current: false, endpoint: "ssh://box", error: "" }]);
+  assert.throws(() => parseContexts('{"Name":"x"}'), /context ls/);
 });

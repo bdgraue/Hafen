@@ -28,7 +28,7 @@ jobs:
           apt-get update
           apt-get install --yes --no-install-recommends \
             ca-certificates cmake ninja-build g++ dpkg-dev file nodejs \
-            qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools \
+            qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools qt6-tools-dev qt6-l10n-tools \
             libkirigami-dev libkf6statusnotifieritem-dev libkf6dbusaddons-dev \
             appstream desktop-file-utils
       - uses: actions/checkout@v7
