@@ -237,3 +237,10 @@ test("disk usage and the space a prune freed are read from Docker's output", asy
   assert.equal(reclaimed("nothing"), null);
   assert.equal(Object.values(PRUNE).some(args => args.includes("volume")), false);
 });
+
+test("docker contexts are listed with their endpoint", async () => {
+  const { parseContexts } = await import("../src/model.mjs");
+  assert.deepEqual(parseContexts('{"Current":true,"Description":"x","DockerEndpoint":"unix:///var/run/docker.sock","Error":"","Name":"default"}\n{"Current":false,"DockerEndpoint":"ssh://box","Error":"","Name":"box"}\n'),
+    [{ name: "default", current: true, endpoint: "unix:///var/run/docker.sock", error: "" }, { name: "box", current: false, endpoint: "ssh://box", error: "" }]);
+  assert.throws(() => parseContexts('{"Name":"x"}'), /context ls/);
+});

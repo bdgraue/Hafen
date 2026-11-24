@@ -14,6 +14,7 @@ Kirigami.ApplicationWindow {
     id: root
 
     required property bool startHidden
+    property bool started: false
 
     property var containers: []
     property bool loaded: false
@@ -30,7 +31,16 @@ Kirigami.ApplicationWindow {
     property var openGroups: JSON.parse(settings.openGroups)
     property var closedSections: JSON.parse(settings.closedSections)
     // Compose project -> { workingDir, configFiles }, kept after `docker compose down` removed every container.
-    property var remembered: JSON.parse(settings.remembered)
+    // Per Docker context: Compose project -> { workingDir, configFiles }. "" is whatever context the CLI uses.
+    property var rememberedByContext: JSON.parse(settings.rememberedByContext)
+    readonly property var remembered: rememberedByContext[settings.context] ?? {}
+    // [{ name, current, endpoint, error }] from `docker context ls`.
+    property var contexts: []
+    // Folders of a remote daemon are not on this machine.
+    readonly property bool localDaemon: {
+        const chosen = settings.context ? contexts.find(c => c.name === settings.context) : contexts.find(c => c.current);
+        return !chosen || chosen.endpoint.startsWith("unix://");
+    }
     // "project:<name>" or "container:<name>" -> { name, color }. Container names survive a recreate, ids do not.
     property var custom: JSON.parse(settings.custom)
     // Container id -> { cpu, mem } from `docker stats`, only while the setting is on and the window is shown.
@@ -121,16 +131,27 @@ Kirigami.ApplicationWindow {
             if (found.length)
                 settings.terminal = found[0].command;
         }
+        if (settings.remembered !== "{}" && rememberedByContext[""] === undefined) {
+            rememberedByContext = withKey(rememberedByContext, "", JSON.parse(settings.remembered));
+            settings.rememberedByContext = JSON.stringify(rememberedByContext);
+            settings.remembered = "{}";
+        }
         if (settings.checkUpdates)
             Launcher.checkForUpdate();
+        Docker.context = settings.context;
         Docker.startWatching();
+        loadContexts();
+        started = true;
     }
 
     Settings {
         id: settings
         property string openGroups: "[]"
         property string closedSections: "[]"
+        // Before 0.3 projects were remembered without a context; read once and moved to rememberedByContext[""].
         property string remembered: "{}"
+        property string rememberedByContext: "{}"
+        property string context: ""
         property string custom: "{}"
         property string terminal: ""
         property bool showStats: false
@@ -173,7 +194,8 @@ Kirigami.ApplicationWindow {
 
     Timer {
         interval: Docker.watching ? (root.visible ? Model.WATCHED_REFRESH_MS : Model.WATCHED_HIDDEN_REFRESH_MS) : (root.visible ? Model.REFRESH_MS : Model.HIDDEN_REFRESH_MS)
-        running: true
+        // Starts only once Component.onCompleted has set the Docker context, so the first read asks the right daemon.
+        running: root.started
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refresh(false)
@@ -194,7 +216,7 @@ Kirigami.ApplicationWindow {
 
     Timer {
         interval: Model.STATS_REFRESH_MS
-        running: settings.showStats && root.visible
+        running: root.started && settings.showStats && root.visible
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refreshStats()
@@ -313,6 +335,37 @@ Kirigami.ApplicationWindow {
         }, Model.READ_TIMEOUT_MS);
     }
 
+    function setRemembered(projects) {
+        rememberedByContext = withKey(rememberedByContext, settings.context, projects);
+        settings.rememberedByContext = JSON.stringify(rememberedByContext);
+    }
+
+    function loadContexts() {
+        Docker.run(Model.CONTEXT_ARGS, (code, stdout, stderr) => {
+            try {
+                if (code !== 0)
+                    throw new Error(Model.describeError(code, stderr).title);
+                contexts = Model.parseContexts(stdout);
+            } catch (e) {
+                contexts = [];
+                tray.notify("Docker-Kontexte nicht lesbar", String(e.message ?? e), "dialog-warning");
+            }
+        }, Model.READ_TIMEOUT_MS);
+    }
+
+    // Everything shown belongs to the old daemon; start over with the new one.
+    function switchContext(name) {
+        if (name === settings.context)
+            return;
+        settings.context = name;
+        Docker.context = name;
+        containers = [];
+        loaded = false;
+        stats = {};
+        failed = {};
+        refresh(true);
+    }
+
     function announceProblems(problems) {
         for (const p of problems) {
             // Hafen's own actions report their outcome themselves.
@@ -335,13 +388,11 @@ Kirigami.ApplicationWindow {
         const next = Object.assign({}, remembered, sources);
         if (JSON.stringify(next) === JSON.stringify(remembered))
             return;
-        remembered = next;
-        settings.remembered = JSON.stringify(next);
+        setRemembered(next);
     }
 
     function forget(project) {
-        remembered = withKey(remembered, project, undefined);
-        settings.remembered = JSON.stringify(remembered);
+        setRemembered(withKey(remembered, project, undefined));
         setCustom(`project:${project}`, undefined);
     }
 
@@ -781,6 +832,8 @@ Kirigami.ApplicationWindow {
         function openSettings() {
             terminals = root.findTerminals();
             terminalField.text = settings.terminal;
+            root.loadContexts();
+            contextBox.chosen = settings.context;
             statsBox.checked = settings.showStats;
             autostartBox.checked = Launcher.autostart;
             updatesBox.checked = settings.checkUpdates;
@@ -794,6 +847,7 @@ Kirigami.ApplicationWindow {
         standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
         onAccepted: {
             settings.terminal = terminalField.text.trim();
+            root.switchContext(contextBox.chosen);
             settings.showStats = statsBox.checked;
             settings.checkUpdates = updatesBox.checked;
             settings.notifyProblems = problemsBox.checked;
@@ -801,6 +855,18 @@ Kirigami.ApplicationWindow {
         }
 
         Kirigami.FormLayout {
+            QQC2.ComboBox {
+                id: contextBox
+                // "" follows the context the Docker CLI uses.
+                property string chosen: ""
+                readonly property var names: [""].concat(root.contexts.map(c => c.name))
+                Kirigami.FormData.label: "Docker-Kontext:"
+                visible: root.contexts.length > 1 || settings.context !== ""
+                model: names.map(n => n === "" ? "Wie die Docker-CLI" : n)
+                currentIndex: Math.max(0, names.indexOf(chosen))
+                onActivated: index => chosen = names[index]
+            }
+
             QQC2.ComboBox {
                 Kirigami.FormData.label: "Terminal:"
                 visible: preferences.terminals.length > 0
@@ -956,7 +1022,7 @@ Kirigami.ApplicationWindow {
         QQC2.MenuItem {
             text: "Projektordner öffnen"
             icon.name: "document-open-folder"
-            visible: menu.isProject && root.remembered[menu.group.project] !== undefined
+            visible: menu.hasCompose && root.localDaemon
             height: visible ? implicitHeight : 0
             onTriggered: root.launch(["xdg-open", root.remembered[menu.group.project].workingDir], "Projektordner")
         }
@@ -1013,7 +1079,8 @@ Kirigami.ApplicationWindow {
     }
 
     pageStack.initialPage: Kirigami.ScrollablePage {
-        title: root.loaded && !root.errorTitle ? `Docker · ${root.activeCount} von ${root.containers.length} aktiv` : "Docker"
+        readonly property string daemon: settings.context ? `Docker (${settings.context})` : "Docker"
+        title: root.loaded && !root.errorTitle ? `${daemon} · ${root.activeCount} von ${root.containers.length} aktiv` : daemon
 
         actions: [
             Kirigami.Action {

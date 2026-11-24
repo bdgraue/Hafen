@@ -464,3 +464,13 @@ export function reclaimed(stdout) {
   const m = stdout.match(/^Total(?: reclaimed space)?:\s*(.+?)\s*$/m);
   return m ? m[1] : null;
 }
+
+export const CONTEXT_ARGS = ["context", "ls", "--format", "{{json .}}"];
+
+export function parseContexts(stdout) {
+  return stdout.split(/\r?\n/).filter(line => line.trim()).map(line => {
+    const row = JSON.parse(line);
+    if (typeof row.Name !== "string" || typeof row.Current !== "boolean") throw new Error("Ungültige Antwort von docker context ls");
+    return { name: row.Name, current: row.Current, endpoint: String(row.DockerEndpoint ?? ""), error: String(row.Error ?? "") };
+  });
+}
