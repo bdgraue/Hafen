@@ -39,6 +39,8 @@ public:
 
 Q_SIGNALS:
     void projectAction(const QString &project, const QString &action);
+    // Every notification Hafen shows, as it was handed to the desktop.
+    void notified(const QString &title, const QString &body, const QString &iconName);
     void windowChanged();
     void subtitleChanged();
     void warningChanged();

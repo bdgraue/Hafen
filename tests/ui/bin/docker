@@ -1,0 +1,179 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Hafen contributors
+
+// A stand-in for the docker CLI in the UI tests. It keeps one JSON file per container in $HAFEN_FAKE_DIR/containers,
+// records every call in calls.log and answers the commands Hafen uses. `ps` and `stats` print the shape that
+// DOCKER_ARGS and STATS_ARGS in src/model.mjs ask for; the --format argument itself is ignored.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+
+const dir = process.env.HAFEN_FAKE_DIR;
+if (!dir) {
+  process.stderr.write("HAFEN_FAKE_DIR is not set\n");
+  process.exit(2);
+}
+const containersDir = path.join(dir, "containers");
+const removedDir = path.join(dir, "removed");
+const eventsFile = path.join(dir, "events.log");
+
+const argv = process.argv.slice(2);
+fs.appendFileSync(path.join(dir, "calls.log"), JSON.stringify(argv) + "\n");
+
+const args = argv.slice();
+if (args[0] === "--context") args.splice(0, 2);
+
+const readJson = (file, fallback) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : fallback);
+const die = (message, code = 1) => {
+  process.stderr.write(message + "\n");
+  process.exit(code);
+};
+
+if (fs.existsSync(path.join(dir, "daemon-down"))) {
+  die("failed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory");
+}
+// fail.json: { "<leading words of the command>": "stderr text" }
+const fails = readJson(path.join(dir, "fail.json"), {});
+const line = args.join(" ");
+for (const key of Object.keys(fails)) {
+  if (line === key || line.startsWith(key + " ")) die(fails[key]);
+}
+
+const list = () => fs.readdirSync(containersDir).sort().map(file => JSON.parse(fs.readFileSync(path.join(containersDir, file), "utf8")));
+const file = id => path.join(containersDir, id + ".json");
+const save = c => fs.writeFileSync(file(c.id), JSON.stringify(c));
+const event = (action, id) => fs.appendFileSync(eventsFile, JSON.stringify({ Type: "container", Action: action, id }) + "\n");
+const find = id => {
+  if (!fs.existsSync(file(id))) die(`Error response from daemon: No such container: ${id}`);
+  return JSON.parse(fs.readFileSync(file(id), "utf8"));
+};
+const run = c => Object.assign(c, { state: "running", status: "Up 1 second" });
+const halt = c => Object.assign(c, { state: "exited", status: "Exited (0) 1 second ago" });
+const isActive = c => ["running", "paused", "restarting"].includes(c.state);
+
+function containerCommand(command, id) {
+  const c = find(id);
+  if (command === "rm") {
+    if (isActive(c)) die(`Error response from daemon: cannot remove container "/${c.name}": container is ${c.state}: stop the container before removing`);
+    fs.unlinkSync(file(id));
+  } else {
+    if (command === "start" && c.state === "paused") die("Error response from daemon: cannot start a paused container, try unpause instead");
+    if (command === "unpause" && c.state !== "paused") die(`Error response from daemon: Container ${id} is not paused`);
+    save(command === "stop" ? halt(c) : run(c));
+  }
+  event(command === "rm" ? "destroy" : command, id);
+  process.stdout.write(id + "\n");
+}
+
+function compose(rest) {
+  let project = "";
+  while (rest.length && rest[0].startsWith("--")) {
+    const [flag, value] = rest.splice(0, 2);
+    if (flag === "--project-name") project = value;
+  }
+  const command = rest[0];
+  const members = list().filter(c => c.project === project);
+  const parked = path.join(removedDir, project);
+  if (command === "up") {
+    if (fs.existsSync(parked)) {
+      for (const name of fs.readdirSync(parked)) fs.renameSync(path.join(parked, name), path.join(containersDir, name));
+    }
+    for (const c of list().filter(c => c.project === project)) {
+      save(run(c));
+      event("start", c.id);
+    }
+  } else if (command === "stop") {
+    for (const c of members.filter(isActive)) {
+      save(halt(c));
+      event("stop", c.id);
+    }
+  } else if (command === "restart") {
+    for (const c of members.filter(isActive)) {
+      save(run(c));
+      event("restart", c.id);
+    }
+  } else if (command === "down") {
+    fs.mkdirSync(parked, { recursive: true });
+    for (const c of members) {
+      fs.writeFileSync(path.join(parked, c.id + ".json"), JSON.stringify(halt(c)));
+      fs.unlinkSync(file(c.id));
+      event("destroy", c.id);
+    }
+  } else {
+    die(`unknown docker compose command: ${command}`);
+  }
+}
+
+function follow() {
+  let offset = 0;
+  setInterval(() => {
+    const size = fs.existsSync(eventsFile) ? fs.statSync(eventsFile).size : 0;
+    // The tests truncate the file between cases.
+    if (size < offset) offset = 0;
+    if (size === offset) return;
+    const fd = fs.openSync(eventsFile, "r");
+    const buffer = Buffer.alloc(size - offset);
+    fs.readSync(fd, buffer, 0, buffer.length, offset);
+    fs.closeSync(fd);
+    offset = size;
+    process.stdout.write(buffer);
+  }, 30);
+}
+
+switch (args[0]) {
+  case "ps":
+    for (const c of list()) {
+      process.stdout.write(JSON.stringify({
+        id: c.id, name: c.name, image: c.image, status: c.status, state: c.state, ports: c.ports,
+        project: c.project, workingDir: c.workingDir, configFiles: c.configFiles,
+      }) + "\n");
+    }
+    break;
+  case "stats":
+    for (const c of list().filter(c => c.state === "running")) {
+      process.stdout.write(JSON.stringify({ id: c.id, cpu: c.cpu ?? "0.00%", mem: `${c.mem ?? "10MiB"} / 16GiB` }) + "\n");
+    }
+    break;
+  case "events":
+    follow();
+    break;
+  case "start":
+  case "stop":
+  case "restart":
+  case "unpause":
+  case "rm":
+    containerCommand(args[0], args[1]);
+    break;
+  case "compose":
+    compose(args.slice(1));
+    break;
+  case "system":
+    for (const row of [
+      { Type: "Images", TotalCount: "12", Active: "5", Size: "4.2GB", Reclaimable: "1.9GB (45%)" },
+      { Type: "Containers", TotalCount: String(list().length), Active: String(list().filter(isActive).length), Size: "120MB", Reclaimable: "80MB (66%)" },
+      { Type: "Local Volumes", TotalCount: "6", Active: "4", Size: "2.1GB", Reclaimable: "300MB (14%)" },
+      { Type: "Build Cache", TotalCount: "40", Active: "0", Size: "5.6GB", Reclaimable: "5.6GB" },
+    ]) process.stdout.write(JSON.stringify(row) + "\n");
+    break;
+  case "container":
+    for (const c of list().filter(c => !isActive(c))) {
+      fs.unlinkSync(file(c.id));
+      event("destroy", c.id);
+    }
+    process.stdout.write("Deleted Containers:\nabc\n\nTotal reclaimed space: 80MB\n");
+    break;
+  case "image":
+    process.stdout.write(`Total reclaimed space: ${args.includes("--all") ? "1.9GB" : "300MB"}\n`);
+    break;
+  case "builder":
+    process.stdout.write("ID\tRECLAIMABLE\tSIZE\nabc\ttrue\t5.6GB\nTotal:\t5.6GB\n");
+    break;
+  case "context":
+    for (const row of readJson(path.join(dir, "contexts.json"), [{ Name: "default", Current: true, DockerEndpoint: "unix:///var/run/docker.sock", Error: "" }])) {
+      process.stdout.write(JSON.stringify(row) + "\n");
+    }
+    break;
+  default:
+    die(`fake docker: unknown command: ${line}`, 64);
+}

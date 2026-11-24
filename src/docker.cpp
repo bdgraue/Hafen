@@ -25,6 +25,16 @@ Docker::Docker(QObject *parent)
     connect(m_reconnect, &QTimer::timeout, this, &Docker::launchWatcher);
 }
 
+Docker::~Docker()
+{
+    // `docker events` never ends by itself; without this Qt warns about destroying a running process.
+    if (m_events) {
+        m_events->disconnect(this);
+        m_events->kill();
+        m_events->waitForFinished(1000);
+    }
+}
+
 QStringList Docker::contextArgs() const
 {
     return m_context.isEmpty() ? QStringList() : QStringList{QStringLiteral("--context"), m_context};
@@ -85,11 +95,12 @@ void Docker::stopWatching()
 {
     m_wantWatching = false;
     m_reconnect->stop();
-    if (m_events) {
-        m_events->disconnect(this);
-        m_events->kill();
-        m_events->deleteLater();
+    if (QProcess *process = m_events) {
         m_events = nullptr;
+        process->disconnect(this);
+        // Deleted only once it is gone: kill() returns before the process has ended.
+        connect(process, &QProcess::finished, process, &QObject::deleteLater);
+        process->kill();
     }
     setWatching(false);
 }

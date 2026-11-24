@@ -67,6 +67,7 @@ void Tray::setWarning(bool warning)
 void Tray::notify(const QString &title, const QString &body, const QString &iconName)
 {
     m_item->showMessage(title, body, iconName);
+    Q_EMIT notified(title, body, iconName);
 }
 
 void Tray::setProjects(const QVariantList &projects)

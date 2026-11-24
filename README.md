@@ -14,7 +14,7 @@ Jedes Release enthält ein `.deb` pro Ubuntu-Version. Unter
 herunterladen und installieren:
 
 ```sh
-sudo apt install ./hafen_0.3.0_ubuntu26.10_amd64.deb
+sudo apt install ./hafen_0.3.1_ubuntu26.10_amd64.deb
 ```
 
 Hafen steht danach im Anwendungsmenü. Für ein Update installierst du das neue
@@ -36,10 +36,14 @@ sudo apt install cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-decl
 Bauen und für den eigenen Benutzer installieren:
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 cmake --build build
 cmake --install build --prefix ~/.local
 ```
+
+`-DBUILD_TESTING=OFF` lässt die Tests weg. Ohne die Option brauchst du
+zusätzlich Node.js, `dbus-run-session` und das QML-Modul `QtTest`, siehe
+[Entwicklung](#entwicklung).
 
 Für ein Update holst du mit `git pull` den neuen Stand und führst dieselben
 drei Befehle noch einmal aus. Ein eigenes `.deb` erzeugt `cpack -G DEB` im
@@ -163,7 +167,30 @@ Neue oder geänderte Texte im Code überträgt
 ## Entwicklung
 
 ```sh
-node --test tests/*.test.mjs
+cmake -S . -B build -G Ninja && cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+`ctest` führt zwei Testgruppen aus:
+
+- `model` prüft die Logik in `src/model.mjs` unter Node.js. Die Fälle stehen
+  in `tests/model.cases.mjs`.
+- `ui` startet das echte Fenster (`src/Main.qml` und die C++-Klassen) und
+  bedient es mit Maus und Tastatur. Die Tests laufen ohne sichtbares Fenster
+  (`offscreen`), auf einem eigenen D-Bus und gegen ein nachgebautes `docker`
+  in `tests/ui/bin/`. Sie berühren also weder deinen Desktop noch deine
+  Container. Die Beispieldaten stehen in `tests/ui/scenario.json`. Dieselben
+  Fälle aus `model.cases.mjs` laufen hier noch einmal in Qts JavaScript-Engine,
+  weil die weniger versteht als Node.js.
+
+Unter Ubuntu brauchst du dafür zusätzlich `nodejs`, `dbus-daemon` und
+`qml6-module-qttest`. Die Tests legen Screenshots unter
+`build/tests/ui/artifacts/` ab. Mit `HAFEN_TEST_LANGUAGE=de` entstehen sie in
+einer Übersetzung:
+
+```sh
+HAFEN_TEST_LANGUAGE=de dbus-run-session --config-file=tests/ui/dbus-session.conf -- \
+  build/tests/ui/hafen_uitest Hafen::test_screenshots
 ```
 
 Release: Die Versionsnummer wird in `CMakeLists.txt` (`project(... VERSION)`)

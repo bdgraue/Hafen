@@ -1,0 +1,11 @@
+[
+  { "id": "a1f0c3d2e4b5", "name": "shop-web-1", "image": "nginx:1.27", "state": "running", "status": "Up 2 hours (healthy)", "ports": "0.0.0.0:8080->80/tcp, [::]:8080->80/tcp", "project": "shop", "workingDir": "/srv/shop", "configFiles": "/srv/shop/compose.yaml", "cpu": "12.50%", "mem": "256MiB" },
+  { "id": "b2e1d4c3f5a6", "name": "shop-db-1", "image": "mariadb:11", "state": "running", "status": "Up 2 hours", "ports": "127.0.0.1:3306->3306/tcp", "project": "shop", "workingDir": "/srv/shop", "configFiles": "/srv/shop/compose.yaml", "cpu": "3.20%", "mem": "512MiB" },
+  { "id": "c3d2e5f4a6b7", "name": "shop-mailer-1", "image": "axllent/mailpit", "state": "exited", "status": "Exited (0) 3 days ago", "ports": "", "project": "shop", "workingDir": "/srv/shop", "configFiles": "/srv/shop/compose.yaml" },
+  { "id": "d4e3f6a5b7c8", "name": "wiki-app-1", "image": "wikijs:2", "state": "running", "status": "Up 5 minutes (unhealthy)", "ports": "0.0.0.0:3000->3000/tcp", "project": "wiki", "workingDir": "/srv/wiki", "configFiles": "/srv/wiki/compose.yaml,/srv/wiki/compose.override.yaml", "cpu": "48.00%", "mem": "1.5GiB" },
+  { "id": "e5f4a7b6c8d9", "name": "blog-web-1", "image": "ghost:5", "state": "exited", "status": "Exited (0) 2 weeks ago", "ports": "", "project": "blog", "workingDir": "/srv/blog", "configFiles": "/srv/blog/compose.yaml" },
+  { "id": "f6a5b8c7d9e0", "name": "blog-db-1", "image": "mysql:8", "state": "exited", "status": "Exited (0) 2 weeks ago", "ports": "", "project": "blog", "workingDir": "/srv/blog", "configFiles": "/srv/blog/compose.yaml" },
+  { "id": "a7b6c9d8e0f1", "name": "redis-cache", "image": "redis:7", "state": "running", "status": "Up 6 days", "ports": "6379/tcp", "project": "", "workingDir": "", "configFiles": "", "cpu": "0.40%", "mem": "24MiB" },
+  { "id": "b8c7d0e9f1a2", "name": "worker", "image": "busybox", "state": "paused", "status": "Up 3 hours (Paused)", "ports": "", "project": "", "workingDir": "", "configFiles": "" },
+  { "id": "c9d8e1f0a2b3", "name": "old-job", "image": "alpine:3", "state": "exited", "status": "Exited (137) 4 weeks ago", "ports": "", "project": "", "workingDir": "", "configFiles": "" }
+]

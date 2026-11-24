@@ -26,6 +26,7 @@ class Docker : public QObject
 
 public:
     explicit Docker(QObject *parent = nullptr);
+    ~Docker() override;
 
     // Runs the docker CLI without blocking and calls back with (exitCode, stdout, stderr).
     // exitCode is -2 when docker could not be started at all and -1 when it crashed or was killed after timeoutMs;

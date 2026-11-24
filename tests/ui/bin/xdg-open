@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Hafen contributors
+
+// Records what Hafen launched instead of opening a browser, file manager or terminal.
+"use strict";
+const path = require("path");
+require("fs").appendFileSync(path.join(process.env.HAFEN_FAKE_DIR, "launched.log"), JSON.stringify([path.basename(process.argv[1]), ...process.argv.slice(2)]) + "\n");

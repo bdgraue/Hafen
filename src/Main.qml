@@ -146,6 +146,7 @@ Kirigami.ApplicationWindow {
 
     Settings {
         id: settings
+        objectName: "settings"
         property string openGroups: "[]"
         property string closedSections: "[]"
         // Before 0.3 projects were remembered without a context; read once and moved to rememberedByContext[""].
@@ -172,6 +173,7 @@ Kirigami.ApplicationWindow {
 
     Tray {
         id: tray
+        objectName: "tray"
         onProjectAction: (project, action) => {
             const group = root.allGroups.find(g => g.project === project);
             if (!group)
@@ -597,6 +599,8 @@ Kirigami.ApplicationWindow {
         return items;
     }
     property string focusKey: ""
+    // The highlight belongs to the keyboard: it shows after a key moved it and hides again on a mouse click.
+    property bool keyNav: false
     // The highlighted row's delegate, for the context menu's position and for scrolling.
     property var focusItem: null
 
@@ -627,6 +631,7 @@ Kirigami.ApplicationWindow {
     }
 
     function handleKey(event) {
+        keyNav = true;
         const group = focusedGroup();
         const hit = focusedContainer();
         switch (event.key) {
@@ -693,6 +698,9 @@ Kirigami.ApplicationWindow {
     function openMenu(group, container, item) {
         menu.group = wholeGroup(group);
         menu.container = container;
+        // "Standalone containers" is no unit: without stopped ones to remove its menu would open empty.
+        if (!menu.forContainer && !menu.isProject && menu.removable.length === 0)
+            return;
         if (item)
             menu.popup(item);
         else
@@ -710,6 +718,7 @@ Kirigami.ApplicationWindow {
 
     Kirigami.PromptDialog {
         id: stopConfirm
+        objectName: "stopConfirm"
         property var onConfirm: null
         property string buttonText: ""
         property string buttonIcon: ""
@@ -721,6 +730,7 @@ Kirigami.ApplicationWindow {
 
     Kirigami.PromptDialog {
         id: removeConfirm
+        objectName: "removeConfirm"
         property var targets: []
         property string label: ""
         dialogType: Kirigami.PromptDialog.Warning
@@ -737,6 +747,7 @@ Kirigami.ApplicationWindow {
 
     Kirigami.Dialog {
         id: customize
+        objectName: "customize"
 
         property string key: ""
         property string original: ""
@@ -765,6 +776,7 @@ Kirigami.ApplicationWindow {
 
             QQC2.TextField {
                 id: nameField
+                objectName: "nameField"
                 Layout.fillWidth: true
                 placeholderText: customize.original
                 onAccepted: customize.accept()
@@ -799,6 +811,7 @@ Kirigami.ApplicationWindow {
 
     Kirigami.Dialog {
         id: diskDialog
+        objectName: "diskDialog"
 
         property var rows: []
         property string error: ""
@@ -855,7 +868,7 @@ Kirigami.ApplicationWindow {
 
             QQC2.BusyIndicator {
                 Layout.alignment: Qt.AlignHCenter
-                visible: diskDialog.loading && diskDialog.rows.length === 0
+                visible: diskDialog.rows.length === 0 && diskDialog.error === ""
                 running: visible
             }
 
@@ -916,6 +929,9 @@ Kirigami.ApplicationWindow {
                         }
                         QQC2.Label {
                             visible: usage.modelData.type === "Local Volumes"
+                            // A Flow does not wrap the text of a child; the label gets the dialog's width instead.
+                            width: parent.width
+                            wrapMode: Text.Wrap
                             text: qsTr("Volumes hold data such as databases. Hafen does not remove them.")
                             color: Kirigami.Theme.disabledTextColor
                             font: Kirigami.Theme.smallFont
@@ -939,6 +955,7 @@ Kirigami.ApplicationWindow {
 
     Kirigami.Dialog {
         id: preferences
+        objectName: "preferences"
 
         // Read again on every opening, so a terminal installed meanwhile shows up.
         property var terminals: []
@@ -969,21 +986,34 @@ Kirigami.ApplicationWindow {
             Launcher.autostart = autostartBox.checked;
         }
 
-        Kirigami.FormLayout {
+        // A plain column instead of Kirigami.FormLayout: inside a Kirigami.Dialog the form's size depends on the
+        // dialog's and back, which Qt reports as a binding loop every time the dialog opens.
+        ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Label {
+                visible: contextBox.visible
+                text: qsTr("Docker context:")
+            }
             QQC2.ComboBox {
                 id: contextBox
+                objectName: "contextBox"
                 // "" follows the context the Docker CLI uses.
                 property string chosen: ""
                 readonly property var names: [""].concat(root.contexts.map(c => c.name))
-                Kirigami.FormData.label: qsTr("Docker context:")
+                Layout.fillWidth: true
+                Layout.bottomMargin: Kirigami.Units.largeSpacing
                 visible: root.contexts.length > 1 || settings.context !== ""
                 model: names.map(n => n === "" ? qsTr("Same as the Docker CLI") : n)
                 currentIndex: Math.max(0, names.indexOf(chosen))
                 onActivated: index => chosen = names[index]
             }
 
+            QQC2.Label {
+                text: qsTr("Terminal:")
+            }
             QQC2.ComboBox {
-                Kirigami.FormData.label: qsTr("Terminal:")
+                Layout.fillWidth: true
                 visible: preferences.terminals.length > 0
                 model: preferences.terminals.map(t => t.verified ? t.label : qsTr("%1 (option guessed)").arg(t.label)).concat([qsTr("Custom command")])
                 currentIndex: {
@@ -995,26 +1025,21 @@ Kirigami.ApplicationWindow {
                         terminalField.text = preferences.terminals[index].command;
                 }
             }
-
             QQC2.TextField {
                 id: terminalField
-                Kirigami.FormData.label: preferences.terminals.length ? qsTr("Command:") : qsTr("Terminal:")
+                objectName: "terminalField"
                 Layout.fillWidth: true
                 placeholderText: qsTr("e.g. konsole -e")
             }
-
             QQC2.Label {
                 Layout.fillWidth: true
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 16
                 wrapMode: Text.Wrap
                 font: Kirigami.Theme.smallFont
                 color: Kirigami.Theme.disabledTextColor
                 text: qsTr("Hafen appends the command for logs or a shell, e.g. “docker exec …”. The terminal has to expect a program with arguments after it.")
             }
-
             Kirigami.InlineMessage {
                 Layout.fillWidth: true
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 16
                 visible: preferences.chosen !== null && !preferences.chosen.verified
                 type: Kirigami.MessageType.Warning
                 text: qsTr("This terminal does not declare the option that runs a command. Hafen assumes “-e”. If logs or a shell do not open, adjust the command.")
@@ -1022,32 +1047,47 @@ Kirigami.ApplicationWindow {
 
             QQC2.CheckBox {
                 id: statsBox
-                Kirigami.FormData.label: qsTr("Display:")
+                objectName: "statsBox"
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.largeSpacing
                 text: qsTr("Show CPU and memory")
             }
 
+            // A checkbox does not wrap its text, so it stays short and the details stand in the label below.
             QQC2.CheckBox {
                 id: problemsBox
-                Kirigami.FormData.label: qsTr("Notifications:")
-                text: qsTr("Report crashes, restart loops and unhealthy containers")
+                objectName: "problemsBox"
+                Layout.fillWidth: true
+                text: qsTr("Report container problems")
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                font: Kirigami.Theme.smallFont
+                color: Kirigami.Theme.disabledTextColor
+                text: qsTr("Crashes, restart loops, dead containers and failing healthchecks.")
             }
 
             QQC2.CheckBox {
                 id: autostartBox
-                Kirigami.FormData.label: qsTr("Startup:")
+                objectName: "autostartBox"
+                Layout.fillWidth: true
                 text: qsTr("Start in the tray at login")
             }
 
             QQC2.CheckBox {
                 id: updatesBox
-                Kirigami.FormData.label: qsTr("Updates:")
+                objectName: "updatesBox"
+                Layout.fillWidth: true
                 text: qsTr("Check for new versions at startup")
             }
 
             RowLayout {
-                Kirigami.FormData.label: qsTr("Version:")
+                Layout.topMargin: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.largeSpacing
                 QQC2.Label {
-                    text: Launcher.version
+                    Layout.fillWidth: true
+                    text: qsTr("Version %1").arg(Launcher.version)
                 }
                 QQC2.Button {
                     text: qsTr("Check now")
@@ -1063,11 +1103,13 @@ Kirigami.ApplicationWindow {
 
     QQC2.Menu {
         id: menu
+        objectName: "menu"
 
         property var group: null
         property var container: null
         readonly property bool forContainer: container !== null
-        readonly property var actions: forContainer ? Model.actionsFor(container) : null
+        // For a group this is the set that offers nothing; never null, the entries below read it while the menu switches.
+        readonly property var actions: Model.actionsFor(container ?? {})
         readonly property bool isProject: !forContainer && (group?.project ?? "") !== ""
         // Compose files are known: the project can act as a whole.
         readonly property bool hasCompose: isProject && root.remembered[group.project] !== undefined
@@ -1193,11 +1235,7 @@ Kirigami.ApplicationWindow {
         }
     }
 
-    Shortcut {
-        sequence: "Ctrl+F"
-        onActivated: search.forceActiveFocus()
-    }
-
+    // Ctrl+F needs no shortcut here: Kirigami.SearchField focuses itself on StandardKey.Find, a second one would be ambiguous.
     Shortcut {
         sequence: "F5"
         onActivated: root.refresh(true)
@@ -1205,6 +1243,7 @@ Kirigami.ApplicationWindow {
 
     pageStack.initialPage: Kirigami.ScrollablePage {
         id: page
+        objectName: "page"
         // The counts live in the section headers and the tray tooltip; the title names the daemon only.
         title: settings.context ? qsTr("Docker (%1)").arg(settings.context) : "Docker"
 
@@ -1238,12 +1277,14 @@ Kirigami.ApplicationWindow {
 
             Kirigami.SearchField {
                 id: search
+                objectName: "search"
                 Layout.fillWidth: true
                 Layout.margins: Kirigami.Units.smallSpacing
                 placeholderText: qsTr("Filter projects and containers…")
                 onTextChanged: root.query = text.trim()
                 Keys.onEscapePressed: text = ""
                 Keys.onDownPressed: {
+                    root.keyNav = true;
                     list.forceActiveFocus();
                     if (!root.navItems.includes(root.focusKey))
                         root.moveFocus(0);
@@ -1285,6 +1326,7 @@ Kirigami.ApplicationWindow {
 
         ColumnLayout {
             id: list
+            objectName: "list"
             spacing: 0
             opacity: root.errorTitle ? 0.45 : 1
             focus: true
@@ -1374,16 +1416,18 @@ Kirigami.ApplicationWindow {
                             spacing: 0
 
                             QQC2.ItemDelegate {
+                                objectName: `group:${group.modelData.key}`
                                 Layout.fillWidth: true
                                 // Arrow keys move this highlight; the list, not the row, keeps keyboard focus.
                                 focusPolicy: Qt.NoFocus
-                                highlighted: list.activeFocus && root.focusKey === `g:${group.modelData.key}`
+                                highlighted: root.keyNav && list.activeFocus && root.focusKey === `g:${group.modelData.key}`
                                 onHighlightedChanged: if (highlighted) {
                                     root.focusItem = this;
                                     root.ensureVisible(this);
                                 }
                                 onClicked: {
                                     root.focusKey = `g:${group.modelData.key}`;
+                                    root.keyNav = false;
                                     list.forceActiveFocus();
                                     root.toggleGroup(group.modelData.key);
                                 }
@@ -1419,7 +1463,7 @@ Kirigami.ApplicationWindow {
                                             text: [...group.label][0]?.toUpperCase() ?? "?"
                                             color: "#ffffff"
                                             font.bold: true
-                                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                            font.pixelSize: Math.round(parent.height * 0.62)
                                         }
                                         Kirigami.Icon {
                                             anchors.fill: parent
@@ -1430,6 +1474,7 @@ Kirigami.ApplicationWindow {
 
                                     QQC2.Label {
                                         Layout.fillWidth: true
+                                        objectName: "label"
                                         text: group.label
                                         elide: Text.ElideRight
                                         color: group.idle ? Kirigami.Theme.disabledTextColor : Kirigami.Theme.textColor
@@ -1476,6 +1521,7 @@ Kirigami.ApplicationWindow {
 
                                         QQC2.ToolButton {
                                             id: groupButton
+                                            objectName: "groupButton"
                                             anchors.centerIn: parent
                                             visible: headerHover.hovered && group.actionable
                                             icon.name: group.idle ? "media-playback-start" : "media-playback-stop"
@@ -1494,15 +1540,17 @@ Kirigami.ApplicationWindow {
 
                                 delegate: QQC2.ItemDelegate {
                                     id: row
+                                    objectName: `row:${modelData.name}`
 
                                     focusPolicy: Qt.NoFocus
-                                    highlighted: list.activeFocus && root.focusKey === `c:${modelData.id}`
+                                    highlighted: root.keyNav && list.activeFocus && root.focusKey === `c:${modelData.id}`
                                     onHighlightedChanged: if (highlighted) {
                                         root.focusItem = this;
                                         root.ensureVisible(this);
                                     }
                                     onClicked: {
                                         root.focusKey = `c:${modelData.id}`;
+                                        root.keyNav = false;
                                         list.forceActiveFocus();
                                     }
 
@@ -1517,7 +1565,7 @@ Kirigami.ApplicationWindow {
 
                                     Layout.fillWidth: true
                                     leftPadding: Kirigami.Units.gridUnit * 2
-                                    QQC2.ToolTip.visible: rowHover.hovered && !rowButton.hovered
+                                    QQC2.ToolTip.visible: rowHover.hovered && !rowButton.hovered && !menu.visible
                                     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                                     QQC2.ToolTip.text: failure ? Model.containerTooltip(modelData) + "\n" + qsTr("Last action failed: %1").arg(failure) : Model.containerTooltip(modelData)
 
@@ -1541,6 +1589,7 @@ Kirigami.ApplicationWindow {
 
                                         QQC2.Label {
                                             Layout.fillWidth: true
+                                            objectName: "name"
                                             text: root.containerName(row.modelData)
                                             elide: Text.ElideRight
                                             color: row.ownColor || (row.actions.active ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor)
@@ -1555,15 +1604,17 @@ Kirigami.ApplicationWindow {
 
                                         QQC2.Label {
                                             visible: text !== ""
+                                            objectName: "stats"
                                             text: settings.showStats ? root.statsText(row.modelData) : ""
                                             color: Kirigami.Theme.disabledTextColor
-                                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                            font: Kirigami.Theme.smallFont
                                         }
 
                                         QQC2.Label {
+                                            objectName: "uptime"
                                             text: row.modelData.state === "paused" ? qsTr("paused") : Model.uptime(row.modelData.status)
                                             color: Kirigami.Theme.disabledTextColor
-                                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                            font: Kirigami.Theme.smallFont
                                         }
 
                                         // The slot keeps its width when empty, so hovering never moves the uptime or the name.
@@ -1582,6 +1633,7 @@ Kirigami.ApplicationWindow {
 
                                             QQC2.ToolButton {
                                                 id: rowButton
+                                                objectName: "rowButton"
                                                 anchors.centerIn: parent
                                                 visible: !row.busy && rowHover.hovered && row.quickAction !== ""
                                                 icon.name: row.quickAction === "stop" ? "media-playback-stop" : "media-playback-start"
