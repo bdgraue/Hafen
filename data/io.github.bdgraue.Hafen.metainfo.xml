@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<component type="desktop-application">
+  <id>io.github.bdgraue.Hafen</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Hafen</name>
+  <summary>Docker-Container nach Compose-Projekt im Tray</summary>
+  <description>
+    <p>
+      Hafen zeigt laufende und gestoppte Docker-Container gruppiert nach Compose-Projekt,
+      merkt sich Projekte auch nach docker compose down und startet, stoppt, startet neu
+      oder löscht sie. Logs und eine Shell öffnen sich im eingestellten Terminal.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.bdgraue.Hafen.desktop</launchable>
+  <url type="homepage">https://github.com/bdgraue/Hafen</url>
+  <url type="bugtracker">https://github.com/bdgraue/Hafen/issues</url>
+  <developer id="io.github.bdgraue">
+    <name>bdgraue</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.2.0" date="2026-11-24"/>
+    <release version="0.1.0" date="2026-11-24"/>
+  </releases>
+</component>
