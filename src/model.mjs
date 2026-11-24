@@ -406,3 +406,34 @@ export function filterGroups(groups, query, projectLabel, containerLabel) {
   }
   return result;
 }
+
+export function exitCode(status) {
+  const m = status.match(/^Exited \((-?\d+)\)/i);
+  return m ? Number(m[1]) : null;
+}
+
+// `docker stop` ends a container with 0, with 143 (SIGTERM) or after its grace period with 137 (SIGKILL).
+// Any other exit code means the container ended by itself.
+const STOP_CODES = [0, 137, 143];
+
+// What went wrong between two reads, per container that was already known: [{ container, kind, code }].
+// kind is "crashed", "restarting", "dead" or "unhealthy". Containers seen for the first time report nothing.
+export function problemsBetween(previous, next) {
+  const before = new Map(previous.map(c => [c.id, c]));
+  const problems = [];
+  for (const c of next) {
+    const old = before.get(c.id);
+    if (!old) continue;
+    if (c.state === "exited" && old.state !== "exited") {
+      const code = exitCode(c.status);
+      if (code !== null && !STOP_CODES.includes(code)) problems.push({ container: c, kind: "crashed", code });
+    } else if (c.state === "restarting" && old.state !== "restarting") {
+      problems.push({ container: c, kind: "restarting", code: null });
+    } else if (c.state === "dead" && old.state !== "dead") {
+      problems.push({ container: c, kind: "dead", code: null });
+    } else if (isRunning(c) && health(c.status) === "unhealthy" && !(isRunning(old) && health(old.status) === "unhealthy")) {
+      problems.push({ container: c, kind: "unhealthy", code: null });
+    }
+  }
+  return problems;
+}

@@ -135,6 +135,7 @@ Kirigami.ApplicationWindow {
         property string terminal: ""
         property bool showStats: false
         property bool checkUpdates: true
+        property bool notifyProblems: true
         property alias windowWidth: root.width
         property alias windowHeight: root.height
     }
@@ -260,6 +261,8 @@ Kirigami.ApplicationWindow {
                     return;
                 }
                 const next = Model.parseContainers(stdout);
+                if (loaded && settings.notifyProblems)
+                    announceProblems(Model.problemsBetween(containers, next));
                 // Polling unchanged data must not rebuild the list.
                 if (JSON.stringify(next) !== JSON.stringify(containers))
                     containers = next;
@@ -308,6 +311,24 @@ Kirigami.ApplicationWindow {
                 statsError = String(e.message ?? e);
             }
         }, Model.READ_TIMEOUT_MS);
+    }
+
+    function announceProblems(problems) {
+        for (const p of problems) {
+            // Hafen's own actions report their outcome themselves.
+            if (busy[p.container.id] !== undefined || busy[`project:${p.container.project}`] !== undefined)
+                continue;
+            const name = containerName(p.container);
+            const where = p.container.project ? ` (${projectName(p.container.project)})` : "";
+            if (p.kind === "crashed")
+                tray.notify(`${name}${where} ist abgestürzt`, `Der Container hat sich mit Code ${p.code} beendet.`, "dialog-error");
+            else if (p.kind === "restarting")
+                tray.notify(`${name}${where} startet ständig neu`, "Der Container läuft in einer Neustart-Schleife.", "dialog-warning");
+            else if (p.kind === "dead")
+                tray.notify(`${name}${where} ist tot`, "Docker konnte den Container nicht sauber beenden.", "dialog-error");
+            else
+                tray.notify(`${name}${where} ist nicht gesund`, "Der Healthcheck des Containers schlägt fehl.", "dialog-warning");
+        }
     }
 
     function remember(sources) {
@@ -623,6 +644,7 @@ Kirigami.ApplicationWindow {
             statsBox.checked = settings.showStats;
             autostartBox.checked = Launcher.autostart;
             updatesBox.checked = settings.checkUpdates;
+            problemsBox.checked = settings.notifyProblems;
             open();
         }
 
@@ -634,6 +656,7 @@ Kirigami.ApplicationWindow {
             settings.terminal = terminalField.text.trim();
             settings.showStats = statsBox.checked;
             settings.checkUpdates = updatesBox.checked;
+            settings.notifyProblems = problemsBox.checked;
             Launcher.autostart = autostartBox.checked;
         }
 
@@ -680,6 +703,12 @@ Kirigami.ApplicationWindow {
                 id: statsBox
                 Kirigami.FormData.label: "Anzeige:"
                 text: "CPU und RAM anzeigen"
+            }
+
+            QQC2.CheckBox {
+                id: problemsBox
+                Kirigami.FormData.label: "Meldungen:"
+                text: "Abstürze, Neustart-Schleifen und kranke Container melden"
             }
 
             QQC2.CheckBox {

@@ -208,3 +208,20 @@ test("the search keeps matching projects whole and filters containers by every w
   const filtered = filterGroups(groups, "web", label, name).find(g => g.project === "shop");
   assert.deepEqual(filtered.active.map(c => c.id), ["web-1"]);
 });
+
+test("problems are reported once, when a container gets into them", async () => {
+  const { problemsBetween, exitCode } = await import("../src/model.mjs");
+  const up = (id, status = "Up 1 hour") => container(id, "shop", status, "running");
+  const exited = (id, code) => container(id, "shop", `Exited (${code}) 1 second ago`, "exited");
+  assert.equal(exitCode("Exited (139) 2 hours ago"), 139);
+  assert.equal(exitCode("Up 1 hour"), null);
+  const kinds = (a, b) => problemsBetween(a, b).map(p => [p.container.id, p.kind, p.code]);
+  assert.deepEqual(kinds([up("a"), up("b"), up("c")], [exited("a", 1), exited("b", 0), exited("c", 143)]), [["a", "crashed", 1]]);
+  assert.deepEqual(kinds([up("a")], [exited("a", 137)]), []);
+  assert.deepEqual(kinds([exited("a", 1)], [exited("a", 1)]), []);
+  assert.deepEqual(kinds([up("a")], [container("a", "shop", "Restarting (1) 1 second ago", "restarting")]), [["a", "restarting", null]]);
+  assert.deepEqual(kinds([up("a")], [container("a", "shop", "Dead", "dead")]), [["a", "dead", null]]);
+  assert.deepEqual(kinds([up("a", "Up 1 hour (healthy)")], [up("a", "Up 1 hour (unhealthy)")]), [["a", "unhealthy", null]]);
+  assert.deepEqual(kinds([up("a", "Up 1 hour (unhealthy)")], [up("a", "Up 2 hours (unhealthy)")]), []);
+  assert.deepEqual(kinds([], [exited("new", 1)]), []);
+});
