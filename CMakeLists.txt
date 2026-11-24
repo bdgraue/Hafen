@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.21)
-project(hafen VERSION 0.3.0 LANGUAGES CXX
+project(hafen VERSION 0.3.1 LANGUAGES CXX
     DESCRIPTION "Docker-Container nach Compose-Projekt im Tray"
     HOMEPAGE_URL "https://github.com/bdgraue/Hafen")
 
@@ -15,11 +15,12 @@ find_package(KF6Kirigami REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
-qt_add_executable(hafen src/main.cpp)
+# The app's QML module and C++ types live in a static library, so the UI tests link the same code as the app.
+qt_add_library(hafencore STATIC)
 
 # NO_CACHEGEN: compiled QML links Qt's private API, which ties the package to one exact Qt patch release
 # (qt6-declarative-private-abi) and breaks it on every distribution Qt update. Hafen's QML is small enough to compile at start.
-qt_add_qml_module(hafen
+qt_add_qml_module(hafencore
     URI Hafen
     VERSION 1.0
     NO_CACHEGEN
@@ -28,22 +29,30 @@ qt_add_qml_module(hafen
     RESOURCES data/hafen.svg
 )
 
-target_include_directories(hafen PRIVATE src)
+target_include_directories(hafencore PUBLIC src)
+target_link_libraries(hafencore PUBLIC
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
+    KF6::StatusNotifierItem
+)
+
+qt_add_executable(hafen src/main.cpp)
 target_compile_definitions(hafen PRIVATE HAFEN_VERSION="${PROJECT_VERSION}")
+# Linking the plugin target also registers the statically linked QML module.
+target_link_libraries(hafen PRIVATE hafencore hafencoreplugin KF6::DBusAddons)
 
 # Every i18n/hafen_<language>.ts is compiled into the binary; a new language needs only its file (see README).
 # `cmake --build build --target update_translations` adds new source texts to all of them.
 file(GLOB HAFEN_TS_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/i18n/hafen_*.ts")
 qt_add_translations(hafen
     TS_FILES ${HAFEN_TS_FILES}
-    SOURCE_TARGETS hafen
+    SOURCE_TARGETS hafen hafencore
     LUPDATE_OPTIONS -no-obsolete -locations none
 )
 
-target_link_libraries(hafen PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
-    KF6::StatusNotifierItem KF6::DBusAddons
-)
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests/ui)
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS hafen RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

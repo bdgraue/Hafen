@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.1
+
+Fehlerkorrekturen, gefunden mit den neuen UI-Tests:
+
+- Compose-Projekte ließen sich nicht starten, stoppen, neu starten oder
+  herunterfahren, und ihre Logs öffneten sich nicht: Qts JavaScript-Engine
+  kennt `Array.prototype.flatMap` nicht. Betroffen waren 0.2.0 und 0.3.0.
+- Der Speicherplatz-Dialog blieb leer.
+- Im Einstellungsdialog ragten lange Texte über den Rand; er ist jetzt
+  einspaltig aufgebaut.
+- Ein Rechtsklick auf „Einzelne Container“ öffnete ein leeres Menü.
+- Strg+F war doppelt belegt und tat deshalb nichts.
+- Die blaue Markierung der Tastatursteuerung blieb nach einem Mausklick
+  stehen. Sie erscheint jetzt nur noch nach einem Tastendruck.
+- Die Liste der Terminals erschien in zufälliger Reihenfolge, weil Qts
+  `sort` nicht stabil ist.
+- Der Tooltip einer Zeile verdeckte das Kontextmenü.
+- Warnungen im Log beim Öffnen des Menüs und der Einstellungen.
+
+Neu: UI-Tests (`ctest`), die das Fenster offscreen gegen ein nachgebautes
+`docker` bedienen; die Logik-Tests laufen zusätzlich in Qts JavaScript-Engine.
+
 ## 0.3.0
 
 - Änderungen erscheinen sofort über `docker events`; das regelmäßige Einlesen

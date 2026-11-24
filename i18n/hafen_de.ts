@@ -310,10 +310,6 @@
         <translation>Eigener Befehl</translation>
     </message>
     <message>
-        <source>Command:</source>
-        <translation>Befehl:</translation>
-    </message>
-    <message>
         <source>e.g. konsole -e</source>
         <translation>z. B. konsole -e</translation>
     </message>
@@ -326,40 +322,16 @@
         <translation>Dieses Terminal gibt nicht an, mit welcher Option es Befehle startet. Hafen nimmt „-e“ an. Öffnen Logs oder Shell nicht, den Befehl anpassen.</translation>
     </message>
     <message>
-        <source>Display:</source>
-        <translation>Anzeige:</translation>
-    </message>
-    <message>
         <source>Show CPU and memory</source>
         <translation>CPU und RAM anzeigen</translation>
-    </message>
-    <message>
-        <source>Notifications:</source>
-        <translation>Meldungen:</translation>
-    </message>
-    <message>
-        <source>Report crashes, restart loops and unhealthy containers</source>
-        <translation>Abstürze, Neustart-Schleifen und kranke Container melden</translation>
-    </message>
-    <message>
-        <source>Startup:</source>
-        <translation>Start:</translation>
     </message>
     <message>
         <source>Start in the tray at login</source>
         <translation>Beim Anmelden im Tray starten</translation>
     </message>
     <message>
-        <source>Updates:</source>
-        <translation>Updates:</translation>
-    </message>
-    <message>
         <source>Check for new versions at startup</source>
         <translation>Beim Start nach neuen Versionen suchen</translation>
-    </message>
-    <message>
-        <source>Version:</source>
-        <translation>Version:</translation>
     </message>
     <message>
         <source>Check now</source>
@@ -396,6 +368,14 @@
     <message>
         <source>Logs</source>
         <translation>Logs</translation>
+    </message>
+    <message>
+        <source>Report container problems</source>
+        <translation>Probleme von Containern melden</translation>
+    </message>
+    <message>
+        <source>Crashes, restart loops, dead containers and failing healthchecks.</source>
+        <translation>Abstürze, Neustart-Schleifen, tote Container und fehlschlagende Healthchecks.</translation>
     </message>
     <message>
         <source>Open shell</source>

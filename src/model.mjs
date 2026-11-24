@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Hafen contributors
 
-// Runs inside Qt's JavaScript engine as well as under Node for the tests: no object spread, no Node APIs.
+// Runs inside Qt's JavaScript engine as well as under Node. Qt's engine lacks newer features (object spread,
+// Array.prototype.flatMap) and mis-sorts with destructured comparator parameters, so tests/model.cases.mjs runs in both.
 // Texts go through qsTr so lupdate finds them (context "model"); the tests provide qsTr and String.prototype.arg.
 
 export const REFRESH_MS = 5000;
@@ -70,8 +71,9 @@ export function composeSources(containers) {
 // in dependency order, including services whose containers are gone.
 export function composeArgs(project, source, command) {
   if (!source?.workingDir || !source.configFiles?.length) throw new Error(qsTr("No Compose directory is stored for %1.").arg(project));
-  return ["compose", "--project-name", project, "--project-directory", source.workingDir,
-    ...source.configFiles.flatMap(file => ["--file", file]), ...command];
+  const files = [];
+  for (const file of source.configFiles) files.push("--file", file);
+  return ["compose", "--project-name", project, "--project-directory", source.workingDir, ...files, ...command];
 }
 
 export const COMPOSE_COMMANDS = {
@@ -391,7 +393,8 @@ export function terminalCandidates(entries, has) {
   if (has("x-terminal-emulator")) found.push({ id: "x-terminal-emulator", label: qsTr("Default terminal (x-terminal-emulator)"), command: "x-terminal-emulator -e", verified: true });
   // xdg-terminal-exec takes the command directly and opens the terminal chosen in xdg-terminals.list.
   if (has("xdg-terminal-exec")) found.push({ id: "xdg-terminal-exec", label: qsTr("Default terminal (xdg-terminal-exec)"), command: "xdg-terminal-exec", verified: true });
-  return found.sort((a, b) => Number(b.verified) - Number(a.verified));
+  // Not a sort: Qt's Array.prototype.sort is not stable and would shuffle the terminals within each half.
+  return found.filter(t => t.verified).concat(found.filter(t => !t.verified));
 }
 
 // Every word of the query has to appear, in any order, in the project's names or the container's names.
