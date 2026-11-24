@@ -1,0 +1,41 @@
+name: Bug report / Fehler melden
+description: Something in Hafen does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Hafen version
+      description: Output of `hafen --version`.
+      placeholder: hafen 0.3.0
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Distribution and version, desktop (e.g. KDE Plasma 6.5), Docker version (`docker version --format '{{.Server.Version}}'`).
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed from
+      options:
+        - .deb from the releases
+        - Built from source
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Messages Hafen printed when started from a terminal, if any. Remove anything private, such as paths or project names.
+      render: shell

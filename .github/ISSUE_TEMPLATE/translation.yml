@@ -1,0 +1,18 @@
+name: Translation / Übersetzung
+description: Offer or improve a translation of Hafen.
+labels: [translation]
+body:
+  - type: markdown
+    attributes:
+      value: The steps to add a language are in the README under "Übersetzungen". A pull request with the new i18n/hafen_<language>.ts is the easiest way.
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: fr
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
