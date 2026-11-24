@@ -578,10 +578,125 @@ Kirigami.ApplicationWindow {
         return group.project ? (allGroups.find(g => g.project === group.project) ?? group) : group;
     }
 
-    function openMenu(group, container) {
+    // Keyboard navigation: the rows in the order they are shown, as "g:<group key>" and "c:<container id>".
+    readonly property var navItems: {
+        const items = [];
+        for (const section of ["active", "inactive"]) {
+            if (query === "" && closedSections.includes(section))
+                continue;
+            for (const key of layout[section] ?? []) {
+                const g = groupByKey[key];
+                if (!g)
+                    continue;
+                items.push(`g:${key}`);
+                if (query !== "" || openGroups.includes(key))
+                    for (const c of g.members)
+                        items.push(`c:${c.id}`);
+            }
+        }
+        return items;
+    }
+    property string focusKey: ""
+    // The highlighted row's delegate, for the context menu's position and for scrolling.
+    property var focusItem: null
+
+    function moveFocus(step) {
+        if (!navItems.length)
+            return;
+        const at = navItems.indexOf(focusKey);
+        focusKey = navItems[at < 0 ? 0 : Math.max(0, Math.min(navItems.length - 1, at + step))];
+    }
+
+    function focusedGroup() {
+        return focusKey.startsWith("g:") ? groupByKey[focusKey.slice(2)] ?? null : null;
+    }
+
+    function focusedContainer() {
+        if (!focusKey.startsWith("c:"))
+            return null;
+        const id = focusKey.slice(2);
+        for (const key in groupByKey) {
+            const found = groupByKey[key].members.find(c => c.id === id);
+            if (found)
+                return {
+                    group: groupByKey[key],
+                    container: found
+                };
+        }
+        return null;
+    }
+
+    function handleKey(event) {
+        const group = focusedGroup();
+        const hit = focusedContainer();
+        switch (event.key) {
+        case Qt.Key_Down:
+            moveFocus(1);
+            break;
+        case Qt.Key_Up:
+            moveFocus(-1);
+            break;
+        case Qt.Key_Right:
+            if (group && !openGroups.includes(group.key) && query === "")
+                toggleGroup(group.key);
+            break;
+        case Qt.Key_Left:
+            if (group && openGroups.includes(group.key) && query === "")
+                toggleGroup(group.key);
+            else if (hit)
+                focusKey = `g:${hit.group.key}`;
+            break;
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+        case Qt.Key_Space:
+            if (group && query === "")
+                toggleGroup(group.key);
+            else if (hit)
+                openMenu(hit.group, hit.container, focusItem);
+            break;
+        case Qt.Key_Menu:
+            if (group)
+                openMenu(group, null, focusItem);
+            else if (hit)
+                openMenu(hit.group, hit.container, focusItem);
+            break;
+        case Qt.Key_Delete:
+            if (hit && Model.actionsFor(hit.container).remove)
+                confirmRemove([hit.container], containerName(hit.container));
+            else if (group) {
+                const removable = wholeGroup(group).members.filter(c => Model.actionsFor(c).remove);
+                if (removable.length)
+                    confirmRemove(removable, projectName(group.project));
+            }
+            break;
+        case Qt.Key_L:
+            if (hit)
+                inTerminal(Model.logsCommand(hit.container, Docker.contextArgs(), logsEnd), qsTr("Logs"));
+            else if (group && remembered[group.project])
+                inTerminal(Model.projectLogsCommand(group.project, remembered[group.project], Docker.contextArgs(), logsEnd), qsTr("Logs"));
+            break;
+        default:
+            return;
+        }
+        event.accepted = true;
+    }
+
+    function ensureVisible(item) {
+        const flick = page.flickable;
+        const top = item.mapToItem(flick.contentItem, 0, 0).y;
+        if (top < flick.contentY)
+            flick.contentY = top;
+        else if (top + item.height > flick.contentY + flick.height)
+            flick.contentY = top + item.height - flick.height;
+    }
+
+    function openMenu(group, container, item) {
         menu.group = wholeGroup(group);
         menu.container = container;
-        menu.popup();
+        if (item)
+            menu.popup(item);
+        else
+            menu.popup();
     }
 
     function findTerminals() {
@@ -1078,7 +1193,18 @@ Kirigami.ApplicationWindow {
         }
     }
 
+    Shortcut {
+        sequence: "Ctrl+F"
+        onActivated: search.forceActiveFocus()
+    }
+
+    Shortcut {
+        sequence: "F5"
+        onActivated: root.refresh(true)
+    }
+
     pageStack.initialPage: Kirigami.ScrollablePage {
+        id: page
         // The counts live in the section headers and the tray tooltip; the title names the daemon only.
         title: settings.context ? qsTr("Docker (%1)").arg(settings.context) : "Docker"
 
@@ -1117,6 +1243,11 @@ Kirigami.ApplicationWindow {
                 placeholderText: qsTr("Filter projects and containers…")
                 onTextChanged: root.query = text.trim()
                 Keys.onEscapePressed: text = ""
+                Keys.onDownPressed: {
+                    list.forceActiveFocus();
+                    if (!root.navItems.includes(root.focusKey))
+                        root.moveFocus(0);
+                }
             }
 
             Kirigami.InlineMessage {
@@ -1153,8 +1284,12 @@ Kirigami.ApplicationWindow {
         }
 
         ColumnLayout {
+            id: list
             spacing: 0
             opacity: root.errorTitle ? 0.45 : 1
+            focus: true
+            activeFocusOnTab: true
+            Keys.onPressed: event => root.handleKey(event)
 
             Kirigami.PlaceholderMessage {
                 Layout.fillWidth: true
@@ -1185,6 +1320,7 @@ Kirigami.ApplicationWindow {
 
                     QQC2.ItemDelegate {
                         Layout.fillWidth: true
+                        focusPolicy: Qt.NoFocus
                         onClicked: root.toggleSection(section.key)
 
                         contentItem: RowLayout {
@@ -1239,7 +1375,18 @@ Kirigami.ApplicationWindow {
 
                             QQC2.ItemDelegate {
                                 Layout.fillWidth: true
-                                onClicked: root.toggleGroup(group.modelData.key)
+                                // Arrow keys move this highlight; the list, not the row, keeps keyboard focus.
+                                focusPolicy: Qt.NoFocus
+                                highlighted: list.activeFocus && root.focusKey === `g:${group.modelData.key}`
+                                onHighlightedChanged: if (highlighted) {
+                                    root.focusItem = this;
+                                    root.ensureVisible(this);
+                                }
+                                onClicked: {
+                                    root.focusKey = `g:${group.modelData.key}`;
+                                    list.forceActiveFocus();
+                                    root.toggleGroup(group.modelData.key);
+                                }
 
                                 HoverHandler {
                                     id: headerHover
@@ -1347,6 +1494,17 @@ Kirigami.ApplicationWindow {
 
                                 delegate: QQC2.ItemDelegate {
                                     id: row
+
+                                    focusPolicy: Qt.NoFocus
+                                    highlighted: list.activeFocus && root.focusKey === `c:${modelData.id}`
+                                    onHighlightedChanged: if (highlighted) {
+                                        root.focusItem = this;
+                                        root.ensureVisible(this);
+                                    }
+                                    onClicked: {
+                                        root.focusKey = `c:${modelData.id}`;
+                                        list.forceActiveFocus();
+                                    }
 
                                     required property int index
                                     readonly property var modelData: group.modelData.members[index] ?? root.emptyContainer
