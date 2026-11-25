@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.21)
 project(hafen VERSION 0.3.1 LANGUAGES CXX
-    DESCRIPTION "Docker-Container nach Compose-Projekt im Tray"
+    DESCRIPTION "Docker containers by Compose project, in the tray"
     HOMEPAGE_URL "https://github.com/bdgraue/Hafen")
 
 set(CMAKE_CXX_STANDARD 20)

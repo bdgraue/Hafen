@@ -1,4 +1,4 @@
-name: Bug report / Fehler melden
+name: Bug report
 description: Something in Hafen does not work as expected.
 labels: [bug]
 body:
