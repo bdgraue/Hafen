@@ -188,7 +188,15 @@ HAFEN_TEST_LANGUAGE=de dbus-run-session --config-file=tests/ui/dbus-session.conf
 Release: raise the version number in `CMakeLists.txt` (`project(... VERSION)`)
 and in `data/io.github.bdgraue.Hafen.metainfo.xml` (`<release>`) and describe
 it in `CHANGELOG.md`. After the merge to `main`, that state gets the tag
-`vX.Y.Z`. The CI builds the `.deb` packages from it and creates the release.
+`vX.Y.Z`. Pushing the tag builds nothing; packages and the release are started
+by hand:
+
+```sh
+gh workflow run ci.yml --ref vX.Y.Z -f release=true
+```
+
+Without `-f release=true` the run only builds the `.deb` packages and attaches
+them to the workflow run, from any branch or tag.
 
 ## License
 
