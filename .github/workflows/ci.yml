@@ -4,8 +4,15 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
+  # Packages and releases are built on request only:
+  # gh workflow run ci.yml --ref <branch or tag> [-f release=true]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish the packages as a GitHub release (start the run on the tag vX.Y.Z)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -55,26 +62,29 @@ jobs:
           name: screenshots-ubuntu-${{ matrix.ubuntu }}
           path: build/tests/ui/artifacts/*.png
           if-no-files-found: ignore
-      - name: Tag matches the version
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release runs on the tag of this version
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        # Started on a branch, `gh release create` would turn the branch name into a new tag.
         # The container has no display; QApplication needs a platform even for --version.
         env:
           QT_QPA_PLATFORM: offscreen
-        run: test "$(./build/hafen --version)" = "hafen ${GITHUB_REF_NAME#v}"
+        run: test "$GITHUB_REF" = "refs/tags/v$(./build/hafen --version | sed 's/^hafen //')"
       - name: Package
+        if: github.event_name == 'workflow_dispatch'
         run: |
           cd build
           cpack -G DEB
           version=$(. /etc/os-release && echo "$VERSION_ID")
           for deb in *.deb; do mv "$deb" "${deb%_amd64.deb}_ubuntu${version}_amd64.deb"; done
       - uses: actions/upload-artifact@v7
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: hafen-ubuntu-${{ matrix.ubuntu }}
           path: build/*.deb
 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' && inputs.release
     runs-on: ubuntu-latest
     permissions:
       contents: write
