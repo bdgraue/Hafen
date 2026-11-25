@@ -2,72 +2,71 @@
 
 ## 0.3.1
 
-Fehlerkorrekturen, gefunden mit den neuen UI-Tests:
+Bug fixes, found with the new UI tests:
 
-- Compose-Projekte ließen sich nicht starten, stoppen, neu starten oder
-  herunterfahren, und ihre Logs öffneten sich nicht: Qts JavaScript-Engine
-  kennt `Array.prototype.flatMap` nicht. Betroffen waren 0.2.0 und 0.3.0.
-- Der Speicherplatz-Dialog blieb leer.
-- Im Einstellungsdialog ragten lange Texte über den Rand; er ist jetzt
-  einspaltig aufgebaut.
-- Ein Rechtsklick auf „Einzelne Container“ öffnete ein leeres Menü.
-- Strg+F war doppelt belegt und tat deshalb nichts.
-- Die blaue Markierung der Tastatursteuerung blieb nach einem Mausklick
-  stehen. Sie erscheint jetzt nur noch nach einem Tastendruck.
-- Die Liste der Terminals erschien in zufälliger Reihenfolge, weil Qts
-  `sort` nicht stabil ist.
-- Der Tooltip einer Zeile verdeckte das Kontextmenü.
-- Warnungen im Log beim Öffnen des Menüs und der Einstellungen.
+- Compose projects could not be started, stopped, restarted or shut down, and
+  their logs did not open: Qt's JavaScript engine does not know
+  `Array.prototype.flatMap`. This affected 0.2.0 and 0.3.0.
+- The disk usage dialog stayed empty.
+- Long texts ran past the edge of the settings dialog; it now has a single
+  column.
+- A right click on “Standalone containers” opened an empty menu.
+- Ctrl+F was bound twice and therefore did nothing.
+- The blue highlight of the keyboard navigation stayed after a mouse click.
+  It now appears only after a key press.
+- The list of terminals appeared in random order, because Qt's `sort` is not
+  stable.
+- The tooltip of a row covered the context menu.
+- Warnings in the log when opening the menu and the settings.
 
-Neu: UI-Tests (`ctest`), die das Fenster offscreen gegen ein nachgebautes
-`docker` bedienen; die Logik-Tests laufen zusätzlich in Qts JavaScript-Engine.
+New: UI tests (`ctest`) that drive the window offscreen against a fake
+`docker`; the logic tests additionally run in Qt's JavaScript engine.
 
 ## 0.3.0
 
-- Änderungen erscheinen sofort über `docker events`; das regelmäßige Einlesen
-  läuft nur noch alle 30 s (Tray: 120 s) als Rückfall.
-- Compose-Projekte starten, stoppen und starten neu über `docker compose`, in
-  der Reihenfolge ihrer Abhängigkeiten; neu ist Herunterfahren
-  (`docker compose down` ohne `--volumes`).
-- Logs aller Container eines Compose-Projekts im Terminal.
-- Suchfeld für Projekte und Container.
-- Tray-Menü mit den Compose-Projekten.
-- Meldungen bei Abstürzen, Neustart-Schleifen, toten und kranken Containern.
-- Speicherplatz anzeigen und aufräumen (Container, Images, Build-Cache).
-- Docker-Kontext wählbar; gemerkte Projekte je Kontext.
-- Übersetzbar: Englisch als Quelle, Deutsch mitgeliefert, weitere Sprachen als
-  `i18n/hafen_<sprache>.ts`.
-- Tastatursteuerung.
-- Die Fensterüberschrift nennt nur noch den Daemon; die Zahlen stehen in den
-  Abschnittsköpfen und im Tray-Tooltip.
-- Behoben: Projekte erschienen in der App unsortiert, weil Qts
-  JavaScript-Engine destrukturierte Vergleichsfunktionen falsch sortiert.
+- Changes appear immediately through `docker events`; the periodic read runs
+  only every 30 s (tray: 120 s) as a fallback.
+- Compose projects start, stop and restart through `docker compose`, in the
+  order of their dependencies; new is Shut down (`docker compose down` without
+  `--volumes`).
+- Logs of all containers of a Compose project in the terminal.
+- Search field for projects and containers.
+- Tray menu with the Compose projects.
+- Notifications about crashes, restart loops, dead and unhealthy containers.
+- Show and clean up disk usage (containers, images, build cache).
+- Selectable Docker context; stored projects per context.
+- Translatable: English as the source, German included, further languages as
+  `i18n/hafen_<language>.ts`.
+- Keyboard navigation.
+- The window title names only the daemon; the counts are in the section
+  headers and the tray tooltip.
+- Fixed: projects appeared unsorted in the app, because Qt's JavaScript engine
+  sorts wrongly with destructured comparison functions.
 
 ## 0.2.0
 
-- Liste getrennt nach „Aktiv“ und „Inaktiv“, beide einklappbar.
-- Docker-Zustände werden genau unterschieden: Pausierte Container lassen sich
-  fortsetzen statt starten, Container in einer Neustart-Schleife und tote
-  Container sind als auffällig markiert.
-- Rechtsklick-Menü: Logs und Shell im eingestellten Terminal, veröffentlichte
-  Ports im Browser, Projektordner öffnen, gestoppte Container löschen
-  (`docker rm` ohne `--force` und `--volumes`, Bestätigung steht auf Abbrechen).
-- Einstellungen: Terminal-Befehl. Hafen findet installierte Terminals über
-  ihre Desktop-Einträge samt Flatpaks, dazu `x-terminal-emulator` und
-  `xdg-terminal-exec`,
-  CPU und RAM pro Container und gesamt (eigener Timer, nur bei sichtbarem
-  Fenster), Autostart, Suche nach neuen Versionen.
-- Versteckt im Tray fragt Hafen nur noch alle 30 Sekunden ab. Wird das Fenster
-  wieder aktiv, liest es sofort neu ein.
-- Fehlermeldungen nennen die Ursache: Docker fehlt, Dienst läuft nicht oder
-  keine Rechte am Socket. Ein hängender Docker-Dienst blockiert die Liste nicht
-  mehr, das Einlesen bricht nach 20 Sekunden ab.
-- Anzahl und Laufzeit bleiben beim Überfahren sichtbar. Neue Daten
-  aktualisieren die vorhandenen Zeilen, statt die Liste neu aufzubauen; ein
-  Hover-Knopf verschwindet nicht mehr bei jeder Aktualisierung.
-- Paketierung als `.deb` mit App-ID `io.github.bdgraue.Hafen`,
-  AppStream-Metadaten und `hafen --version`.
+- List split into “Active” and “Inactive”, both collapsible.
+- Docker states are told apart exactly: paused containers are resumed instead
+  of started, containers in a restart loop and dead containers are marked.
+- Right-click menu: logs and a shell in the configured terminal, published
+  ports in the browser, open the project folder, remove stopped containers
+  (`docker rm` without `--force` and `--volumes`, the confirmation starts on
+  Cancel).
+- Settings: terminal command (Hafen finds installed terminals through their
+  desktop entries including Flatpaks, plus `x-terminal-emulator` and
+  `xdg-terminal-exec`), CPU and memory per container and in total (own timer,
+  only while the window is visible), autostart, check for new versions.
+- Hidden in the tray, Hafen polls only every 30 seconds. When the window
+  becomes active again, it reads the list at once.
+- Error messages name the cause: Docker is missing, the daemon is not running,
+  or no permission on the socket. A hanging Docker daemon no longer blocks the
+  list; reading aborts after 20 seconds.
+- Count and uptime stay visible while hovering. New data updates the existing
+  rows instead of rebuilding the list; a hover button no longer disappears on
+  every refresh.
+- Packaging as `.deb` with the app ID `io.github.bdgraue.Hafen`, AppStream
+  metadata and `hafen --version`.
 
 ## 0.1.0
 
-- Erste Version.
+- First version.
